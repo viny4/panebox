@@ -1,0 +1,329 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <!-- No remote origins: everything is bundled, so lock the page down hard. -->
+  <meta http-equiv="Content-Security-Policy"
+        content="default-src 'none'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: https:; font-src 'self'; connect-src 'none'; form-action 'none'; base-uri 'none'">
+  <title>Panebox</title>
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+  <div class="drag-handle"></div>
+
+  <div id="update-banner" hidden>
+    <span id="update-text"></span>
+    <div id="update-progress" hidden><div id="update-bar"></div></div>
+    <button id="update-restart" class="btn-compact-primary" hidden>Restart to update</button>
+    <button id="update-download" class="btn-compact-primary" hidden>Download</button>
+    <button id="update-dismiss" class="nav-btn" aria-label="Dismiss">✕</button>
+  </div>
+
+  <div id="app-container">
+    <!-- Sidebar -->
+    <aside id="sidebar">
+      <button id="btn-workspace" class="workspace-chip" title="Switch workspace">
+        <span id="workspace-label">All</span>
+        <svg viewBox="0 0 24 24" width="10" height="10" fill="none" stroke="currentColor" stroke-width="3">
+          <polyline points="6 9 12 15 18 9"></polyline>
+        </svg>
+      </button>
+
+      <div id="app-list" role="tablist" aria-label="Services"></div>
+
+      <div class="sidebar-footer">
+        <button id="btn-add-app" class="btn-icon" title="Add service (Cmd/Ctrl+N)" aria-label="Add service">
+          <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2">
+            <line x1="12" y1="5" x2="12" y2="19"></line>
+            <line x1="5" y1="12" x2="19" y2="12"></line>
+          </svg>
+        </button>
+        <button id="btn-settings" class="btn-icon" title="Settings (Cmd/Ctrl+,)" aria-label="Settings">
+          <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2">
+            <circle cx="12" cy="12" r="3"></circle>
+            <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"></path>
+          </svg>
+        </button>
+      </div>
+    </aside>
+
+    <!-- Workspace -->
+    <main id="workspace">
+      <header id="topbar">
+        <div class="nav-buttons">
+          <button id="btn-back" class="nav-btn" title="Back" aria-label="Back">
+            <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2"><polyline points="15 18 9 12 15 6"></polyline></svg>
+          </button>
+          <button id="btn-forward" class="nav-btn" title="Forward" aria-label="Forward">
+            <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2"><polyline points="9 18 15 12 9 6"></polyline></svg>
+          </button>
+          <button id="btn-reload" class="nav-btn" title="Reload (Cmd/Ctrl+R)" aria-label="Reload">
+            <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2"><path d="M23 4v6h-6"></path><path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"></path></svg>
+          </button>
+        </div>
+
+        <div class="url-bar">
+          <svg id="url-lock" viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="11" width="18" height="11" rx="2"></rect><path d="M7 11V7a5 5 0 0 1 10 0v4"></path></svg>
+          <input type="text" id="url-input" placeholder="https://…" readonly aria-label="Current address" />
+        </div>
+
+        <div class="action-buttons">
+          <button id="btn-find" class="nav-btn" title="Find in page (Cmd/Ctrl+F)" aria-label="Find in page">
+            <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="7"></circle><line x1="21" y1="21" x2="16.65" y2="16.65"></line></svg>
+          </button>
+          <button id="btn-todo" class="nav-btn" title="Todo panel (Cmd/Ctrl+T)" aria-label="Todo panel">
+            <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2"><polyline points="9 11 12 14 20 6"></polyline><path d="M20 12v7a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h9"></path></svg>
+          </button>
+          <button id="btn-mute" class="nav-btn" title="Mute this service" aria-label="Mute">
+            <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2"><polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"></polygon><path d="M19.07 4.93a10 10 0 0 1 0 14.14M15.54 8.46a5 5 0 0 1 0 7.07"></path></svg>
+          </button>
+          <button id="btn-dnd" class="nav-btn" title="Do Not Disturb" aria-label="Do Not Disturb">
+            <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"></path><path d="M13.73 21a2 2 0 0 1-3.46 0"></path></svg>
+          </button>
+        </div>
+      </header>
+
+      <!-- Find bar -->
+      <div id="find-bar" hidden>
+        <input type="text" id="find-input" placeholder="Find in page…" aria-label="Find in page" />
+        <span id="find-count">0/0</span>
+        <button id="find-prev" class="nav-btn" title="Previous" aria-label="Previous match">↑</button>
+        <button id="find-next" class="nav-btn" title="Next" aria-label="Next match">↓</button>
+        <button id="find-close" class="nav-btn" title="Close" aria-label="Close find bar">✕</button>
+      </div>
+
+      <div id="view-wrap">
+        <section id="view-container"></section>
+
+        <!-- Todo panel -->
+        <aside id="todo-panel" hidden>
+          <div class="panel-head">
+            <h4>Todo</h4>
+            <button id="btn-todo-close" class="nav-btn" aria-label="Close todo panel">✕</button>
+          </div>
+          <form id="todo-form">
+            <input type="text" id="todo-input" placeholder="Add a task…" aria-label="New task" />
+          </form>
+          <ul id="todo-list"></ul>
+        </aside>
+      </div>
+
+    </main>
+  </div>
+
+  <!-- Add service -->
+  <div id="add-modal" class="modal-overlay" role="dialog" aria-modal="true" aria-labelledby="add-title">
+    <div class="modal-card">
+      <div class="modal-header">
+        <h3 id="add-title">Add a service</h3>
+        <button class="nav-btn" data-close="add-modal" aria-label="Close">✕</button>
+      </div>
+
+      <input type="text" id="catalog-search" class="search-input" placeholder="Search 50+ services…" aria-label="Search services" />
+      <div id="category-tabs" class="category-tabs"></div>
+      <div id="catalog-grid" class="preset-grid"></div>
+
+      <details class="custom-block">
+        <summary>Add a custom URL</summary>
+        <div class="form-group">
+          <label for="custom-name">Name (optional)</label>
+          <input type="text" id="custom-name" placeholder="e.g. Internal Wiki" />
+        </div>
+        <div class="form-group">
+          <label for="custom-url">URL</label>
+          <input type="text" id="custom-url" placeholder="https://…" />
+        </div>
+        <button id="btn-submit-app" class="btn-primary">Add service</button>
+      </details>
+    </div>
+  </div>
+
+  <!-- Settings -->
+  <div id="settings-modal" class="modal-overlay" role="dialog" aria-modal="true" aria-labelledby="settings-title">
+    <div class="modal-card modal-wide">
+      <div class="modal-header">
+        <h3 id="settings-title">Settings</h3>
+        <button class="nav-btn" data-close="settings-modal" aria-label="Close">✕</button>
+      </div>
+
+      <div class="tab-strip">
+        <button class="tab-btn active" data-tab="tab-services">Services</button>
+        <button class="tab-btn" data-tab="tab-workspaces">Workspaces</button>
+        <button class="tab-btn" data-tab="tab-general">General</button>
+        <button class="tab-btn" data-tab="tab-data">Data</button>
+      </div>
+
+      <section id="tab-services" class="tab-panel active">
+        <p class="hint">Drag services in the sidebar to reorder them.</p>
+        <div id="manage-app-list" class="manage-app-list"></div>
+      </section>
+
+      <section id="tab-workspaces" class="tab-panel">
+        <p class="hint">Group services so only what you need is visible.</p>
+        <div id="workspace-list" class="manage-app-list"></div>
+        <form id="workspace-form" class="inline-form">
+          <input type="text" id="workspace-name" placeholder="New workspace name" aria-label="New workspace name" />
+          <button class="btn-primary btn-compact" type="submit">Create</button>
+        </form>
+      </section>
+
+      <section id="tab-general" class="tab-panel">
+        <div class="setting-row">
+          <div><strong>Theme</strong><span>Follows your system by default.</span></div>
+          <select id="set-theme"><option value="system">System</option><option value="dark">Dark</option><option value="light">Light</option></select>
+        </div>
+        <div class="setting-row">
+          <div><strong>Do Not Disturb</strong><span>Silence every notification.</span></div>
+          <label class="switch"><input type="checkbox" id="set-dnd"><span></span></label>
+        </div>
+        <div class="setting-row">
+          <div><strong>Private notifications</strong><span>Show "New message" instead of the content.</span></div>
+          <label class="switch"><input type="checkbox" id="set-privacy"><span></span></label>
+        </div>
+        <div class="setting-row">
+          <div><strong>Unread badges</strong><span>Count on the sidebar and the dock.</span></div>
+          <label class="switch"><input type="checkbox" id="set-badges"><span></span></label>
+        </div>
+        <div class="setting-row">
+          <div><strong>Sleep inactive services</strong><span>Frees the memory of services you aren't using.</span></div>
+          <label class="switch"><input type="checkbox" id="set-hibernate"><span></span></label>
+        </div>
+        <div class="setting-row">
+          <div><strong>Sleep after</strong><span>Minutes of inactivity before sleeping.</span></div>
+          <input type="number" id="set-hibernate-mins" min="1" max="360" class="num-input" />
+        </div>
+        <div class="setting-row">
+          <div><strong>Always on top</strong><span>Keep the window above other apps.</span></div>
+          <label class="switch"><input type="checkbox" id="set-ontop"><span></span></label>
+        </div>
+        <div class="setting-row">
+          <div><strong>Close to tray</strong><span>Closing the window keeps Panebox running.</span></div>
+          <label class="switch"><input type="checkbox" id="set-tray"><span></span></label>
+        </div>
+        <div class="setting-row">
+          <div><strong>Window title</strong><span>Useful for window-manager rules.</span></div>
+          <input type="text" id="set-title" class="text-input" />
+        </div>
+        <div class="setting-row">
+          <div><strong>Check for updates</strong><span>Asks GitHub once a day whether a newer release exists. Sends nothing about you.</span></div>
+          <label class="switch"><input type="checkbox" id="set-updates"><span></span></label>
+        </div>
+        <div class="setting-row" id="spellcheck-row">
+          <div><strong>Spellchecker</strong><span id="spellcheck-note">Choose your dictionaries.</span></div>
+          <select id="set-spellcheck" multiple size="4"></select>
+        </div>
+      </section>
+
+      <section id="tab-data" class="tab-panel">
+        <p class="hint">
+          Panebox stores everything locally and has no account, no server and no telemetry.
+          Export writes a plain JSON file you can copy to another machine.
+        </p>
+        <div class="button-row">
+          <button id="btn-export" class="btn-secondary">Export configuration…</button>
+          <button id="btn-import" class="btn-secondary">Import configuration…</button>
+        </div>
+        <div class="button-row">
+          <button id="btn-check-updates" class="btn-secondary">Check for updates</button>
+          <button id="btn-taskmanager" class="btn-secondary">Open task manager</button>
+          <button id="btn-relaunch" class="btn-secondary">Restart Panebox</button>
+        </div>
+        <div class="button-row">
+          <button id="btn-reset" class="btn-delete-row">Reset all services to defaults</button>
+        </div>
+        <p class="hint" id="config-path"></p>
+      </section>
+    </div>
+  </div>
+
+  <!-- Per-service settings -->
+  <div id="service-modal" class="modal-overlay" role="dialog" aria-modal="true" aria-labelledby="service-title">
+    <div class="modal-card">
+      <div class="modal-header">
+        <h3 id="service-title">Service</h3>
+        <button class="nav-btn" data-close="service-modal" aria-label="Close">✕</button>
+      </div>
+      <div class="form-group">
+        <label for="svc-name">Name</label>
+        <input type="text" id="svc-name" />
+      </div>
+      <div class="form-group">
+        <label for="svc-url">URL</label>
+        <input type="text" id="svc-url" />
+      </div>
+      <div class="setting-row">
+        <div><strong>Notifications</strong><span>Let this service raise desktop alerts.</span></div>
+        <label class="switch"><input type="checkbox" id="svc-notifications"><span></span></label>
+      </div>
+      <div class="setting-row">
+        <div><strong>Alert on new activity</strong><span>Watches the unread count and alerts you itself &mdash; the only way LinkedIn, Instagram and X can notify. Needs sleeping turned off.</span></div>
+        <label class="switch"><input type="checkbox" id="svc-activity"><span></span></label>
+      </div>
+      <div class="setting-row">
+        <div><strong>Unread badge</strong><span>Count this service in the badge total.</span></div>
+        <label class="switch"><input type="checkbox" id="svc-badge"><span></span></label>
+      </div>
+      <div class="setting-row">
+        <div><strong>Allow sleeping</strong><span>Turn off for services that must stay connected.</span></div>
+        <label class="switch"><input type="checkbox" id="svc-hibernate"><span></span></label>
+      </div>
+      <div class="setting-row">
+        <div><strong>Session</strong><span>Isolated gives this service its own login.</span></div>
+        <select id="svc-session"><option value="isolated">Isolated</option><option value="shared">Shared</option></select>
+      </div>
+      <div class="setting-block">
+        <strong>Groups</strong>
+        <span class="block-hint">Which workspaces show this service.</span>
+        <div id="svc-workspaces" class="chip-picker"></div>
+      </div>
+      <div class="form-group">
+        <label for="svc-css">Custom CSS</label>
+        <textarea id="svc-css" rows="4" spellcheck="false" placeholder="body { font-size: 15px }"></textarea>
+      </div>
+      <div class="form-group">
+        <label for="svc-js">Custom JavaScript</label>
+        <textarea id="svc-js" rows="4" spellcheck="false" placeholder="// runs inside this service on every load"></textarea>
+        <p class="warn">Custom JavaScript runs with full access to this service and your logged-in session. Only paste code you understand.</p>
+      </div>
+      <div class="button-row">
+        <button id="svc-save" class="btn-primary">Save</button>
+        <button id="svc-clear" class="btn-delete-row">Clear session &amp; log out</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Task manager -->
+  <div id="task-modal" class="modal-overlay" role="dialog" aria-modal="true" aria-labelledby="task-title">
+    <div class="modal-card">
+      <div class="modal-header">
+        <h3 id="task-title">Task manager</h3>
+        <button class="nav-btn" data-close="task-modal" aria-label="Close">✕</button>
+      </div>
+      <table class="task-table">
+        <thead><tr><th>Service</th><th>CPU</th><th>Memory</th><th>State</th></tr></thead>
+        <tbody id="task-rows"></tbody>
+      </table>
+    </div>
+  </div>
+
+  <!-- Screen share picker -->
+  <div id="screen-modal" class="modal-overlay" role="dialog" aria-modal="true" aria-labelledby="screen-title">
+    <div class="modal-card modal-wide">
+      <div class="modal-header">
+        <h3 id="screen-title">Choose what to share</h3>
+        <button class="nav-btn" id="screen-cancel" aria-label="Cancel">✕</button>
+      </div>
+      <div id="screen-sources" class="screen-grid"></div>
+    </div>
+  </div>
+
+  <div id="workspace-menu" class="popover" hidden></div>
+
+  <script src="catalog.js"></script>
+  <script src="icons.js"></script>
+  <script src="lib/badge.js"></script>
+  <script src="lib/activity.js"></script>
+  <script src="renderer.js"></script>
+</body>
+</html>

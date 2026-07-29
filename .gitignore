@@ -1,0 +1,105 @@
+# ---------------------------------------------------------------- dependencies
+node_modules/
+jspm_packages/
+.pnp
+.pnp.js
+
+# --------------------------------------------------------------- build output
+# electron-builder writes here; installers go to GitHub Releases, never the repo.
+release/
+dist/
+out/
+*.dmg
+*.pkg
+*.exe
+*.msi
+*.AppImage
+*.deb
+*.rpm
+*.snap
+*.zip
+*.blockmap
+# Update metadata, generated at publish time by electron-builder.
+latest*.yml
+builder-debug.yml
+builder-effective-config.yaml
+
+# ------------------------------------------------------------------------ logs
+*.log
+logs/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+.npm
+.eslintcache
+
+# ----------------------------------------------------------------- environment
+# Credentials never belong in the repo. Signing certs and tokens go in GitHub
+# repository secrets.
+.env
+.env.*
+!.env.example
+*.pem
+*.p12
+*.pfx
+*.mobileprovision
+*.keystore
+*.jks
+.notarize.json
+
+# --------------------------------------------------------------------- editors
+.vscode/
+!.vscode/extensions.json
+.idea/
+*.swp
+*.swo
+*.sublime-workspace
+*.sublime-project
+.history/
+
+# -------------------------------------------------------------- AI assistants
+# Local assistant state and instructions — machine-specific, not project code.
+.claude/
+.claude-*/
+CLAUDE.md
+.cursor/
+.cursorrules
+.aider*
+.continue/
+.windsurfrules
+.codeium/
+.github/copilot-instructions.md
+
+# -------------------------------------------------------------------- os cruft
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+.AppleDouble
+.LSOverride
+Icon?
+ehthumbs.db
+Thumbs.db
+Desktop.ini
+$RECYCLE.BIN/
+*~
+.fuse_hidden*
+.directory
+.nfs*
+
+# ---------------------------------------------------------------------- testing
+coverage/
+.nyc_output/
+*.lcov
+test-results/
+
+# -------------------------------------------------------------------- temporary
+tmp/
+temp/
+.cache/
+*.tmp
+*.bak
+*.orig
+*.rej

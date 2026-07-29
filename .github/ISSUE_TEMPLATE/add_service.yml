@@ -1,0 +1,47 @@
+name: Add a service to the catalog
+description: Suggest a web app that should be in the built-in list
+labels: ['catalog']
+body:
+  - type: markdown
+    attributes:
+      value: |
+        You can already add any URL yourself with `Cmd/Ctrl+N` — this is for
+        getting a service into the built-in catalog so everyone gets it.
+
+        **This is the easiest thing to contribute directly.** It's a one-line
+        change in `catalog.js`; see [CONTRIBUTING.md](../blob/main/CONTRIBUTING.md).
+        A pull request is very welcome and will land faster than an issue.
+
+  - type: input
+    id: name
+    attributes:
+      label: Service name
+      placeholder: Linear
+    validations:
+      required: true
+
+  - type: input
+    id: url
+    attributes:
+      label: URL to open
+      description: The page a logged-in user should land on. Must be https.
+      placeholder: https://linear.app
+    validations:
+      required: true
+
+  - type: dropdown
+    id: category
+    attributes:
+      label: Category
+      options: [AI, Messaging, Mail, Social, Productivity, Developer, Media]
+    validations:
+      required: true
+
+  - type: checkboxes
+    id: works
+    attributes:
+      label: Does it work today?
+      description: Add it with Cmd/Ctrl+N first and check.
+      options:
+        - label: I added this URL manually and it loads and lets me sign in
+          required: true

@@ -1,0 +1,94 @@
+name: Bug report
+description: Something isn't working the way it should
+labels: ['bug']
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for taking the time to report this. The details below are what
+        make a bug fixable rather than guessable.
+
+  - type: textarea
+    id: what-happened
+    attributes:
+      label: What happened?
+      description: What did you expect, and what happened instead?
+      placeholder: I clicked X and expected Y, but Z happened.
+    validations:
+      required: true
+
+  - type: textarea
+    id: steps
+    attributes:
+      label: Steps to reproduce
+      placeholder: |
+        1. Open Panebox
+        2. Right-click the WhatsApp icon
+        3. ...
+    validations:
+      required: true
+
+  - type: input
+    id: service
+    attributes:
+      label: Which service?
+      description: If it only happens with one service, name it. Put "all" if it's everywhere.
+      placeholder: WhatsApp
+    validations:
+      required: true
+
+  - type: dropdown
+    id: os
+    attributes:
+      label: Operating system
+      options:
+        - macOS (Apple Silicon)
+        - macOS (Intel)
+        - Windows
+        - Linux
+    validations:
+      required: true
+
+  - type: input
+    id: os-version
+    attributes:
+      label: OS version
+      placeholder: 'macOS 15.2 / Windows 11 23H2 / Ubuntu 24.04'
+    validations:
+      required: true
+
+  - type: input
+    id: version
+    attributes:
+      label: Panebox version
+      description: Help → About, or the release you downloaded.
+      placeholder: 2.0.0
+    validations:
+      required: true
+
+  - type: dropdown
+    id: install
+    attributes:
+      label: How did you install it?
+      options:
+        - Downloaded a release
+        - Built from source
+    validations:
+      required: true
+
+  - type: textarea
+    id: logs
+    attributes:
+      label: Errors from the developer tools (optional)
+      description: 'View → Toggle Developer Tools → Console. Paste anything red.'
+      render: shell
+
+  - type: checkboxes
+    id: checks
+    attributes:
+      label: Before submitting
+      options:
+        - label: I searched existing issues and this isn't a duplicate
+          required: true
+        - label: I'm on the latest version, or I've checked the changelog
+          required: false

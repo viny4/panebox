@@ -1,0 +1,138 @@
+{
+  "name": "panebox",
+  "productName": "Panebox",
+  "version": "2.0.0",
+  "description": "A small, private, open-source desktop deck for your web apps \u2014 AI tools, chat, mail and more in one window.",
+  "main": "main.js",
+  "license": "MIT",
+  "author": {
+    "name": "Panebox contributors"
+  },
+  "homepage": "https://github.com/viny4/panebox",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/viny4/panebox.git"
+  },
+  "bugs": {
+    "url": "https://github.com/viny4/panebox/issues"
+  },
+  "keywords": [
+    "electron",
+    "desktop",
+    "workspace",
+    "web-apps",
+    "ai",
+    "chatgpt",
+    "claude",
+    "privacy",
+    "open-source"
+  ],
+  "scripts": {
+    "start": "electron .",
+    "icons": "node tools/make-icons.js",
+    "dist": "electron-builder",
+    "dist:mac": "electron-builder --mac",
+    "dist:win": "electron-builder --win",
+    "dist:linux": "electron-builder --linux",
+    "pack": "electron-builder --dir",
+    "test": "node --test \"test/**/*.test.js\"",
+    "icons:check": "node tools/make-icons.js --check"
+  },
+  "devDependencies": {
+    "electron": "^43.2.0",
+    "electron-builder": "^25.1.8"
+  },
+  "build": {
+    "appId": "io.github.panebox",
+    "productName": "Panebox",
+    "copyright": "Copyright \u00a9 Panebox contributors",
+    "directories": {
+      "output": "release",
+      "buildResources": "assets"
+    },
+    "files": [
+      "main.js",
+      "preload.js",
+      "webview-preload.js",
+      "renderer.js",
+      "catalog.js",
+      "icons.js",
+      "index.html",
+      "styles.css",
+      "lib/**/*",
+      "assets/**/*",
+      "!**/*.map"
+    ],
+    "mac": {
+      "category": "public.app-category.productivity",
+      "icon": "assets/icon.png",
+      "target": [
+        {
+          "target": "dmg",
+          "arch": [
+            "arm64",
+            "x64"
+          ]
+        },
+        {
+          "target": "zip",
+          "arch": [
+            "arm64",
+            "x64"
+          ]
+        }
+      ],
+      "darkModeSupport": true,
+      "extendInfo": {
+        "NSMicrophoneUsageDescription": "Required for voice and video calls in your web apps.",
+        "NSCameraUsageDescription": "Required for video calls in your web apps."
+      }
+    },
+    "dmg": {
+      "artifactName": "${productName}-${version}-${arch}.${ext}"
+    },
+    "win": {
+      "icon": "assets/icon.png",
+      "target": [
+        {
+          "target": "nsis",
+          "arch": [
+            "x64",
+            "arm64"
+          ]
+        },
+        {
+          "target": "portable",
+          "arch": [
+            "x64"
+          ]
+        }
+      ]
+    },
+    "nsis": {
+      "oneClick": false,
+      "allowToChangeInstallationDirectory": true
+    },
+    "linux": {
+      "icon": "assets/icon.png",
+      "category": "Network",
+      "target": [
+        "AppImage",
+        "deb",
+        "rpm"
+      ],
+      "maintainer": "Panebox contributors"
+    },
+    "publish": [
+      {
+        "provider": "github",
+        "owner": "viny4",
+        "repo": "panebox",
+        "releaseType": "draft"
+      }
+    ]
+  },
+  "dependencies": {
+    "electron-updater": "^6.8.9"
+  }
+}

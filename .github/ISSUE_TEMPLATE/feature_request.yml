@@ -1,0 +1,43 @@
+name: Feature request
+description: Suggest something Panebox should do
+labels: ['enhancement']
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Panebox is deliberately small. Features that need a server, a framework,
+        or a new runtime dependency are usually out of scope — see
+        "What Panebox is not" in [CONTRIBUTING.md](../blob/main/CONTRIBUTING.md).
+        That's not a no, but it's worth knowing before you write it up.
+
+  - type: textarea
+    id: problem
+    attributes:
+      label: What problem does this solve?
+      description: Describe the situation you're in, not the solution you want. It often leads somewhere better.
+      placeholder: When I have twelve services open, I can't find the one I need without hovering over every icon.
+    validations:
+      required: true
+
+  - type: textarea
+    id: solution
+    attributes:
+      label: What would you like to happen?
+    validations:
+      required: true
+
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: Anything you've tried, or seen elsewhere?
+      description: If another app does this well, say which — it helps a lot.
+
+  - type: checkboxes
+    id: checks
+    attributes:
+      label: Before submitting
+      options:
+        - label: I searched existing issues and this isn't already requested
+          required: true
+        - label: This doesn't require a server, an account, or telemetry
+          required: true
