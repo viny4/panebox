@@ -1,8 +1,8 @@
 {
   "name": "panebox",
   "productName": "Panebox",
-  "version": "2.0.0",
-  "description": "A small, private, open-source desktop deck for your web apps \u2014 AI tools, chat, mail and more in one window.",
+  "version": "2.1.0",
+  "description": "A small, private, open-source desktop deck for your web apps — AI tools, chat, mail and more in one window.",
   "main": "main.js",
   "license": "MIT",
   "author": {
@@ -45,7 +45,7 @@
   "build": {
     "appId": "io.github.panebox",
     "productName": "Panebox",
-    "copyright": "Copyright \u00a9 Panebox contributors",
+    "copyright": "Copyright © Panebox contributors",
     "directories": {
       "output": "release",
       "buildResources": "assets"
