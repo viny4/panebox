@@ -36,11 +36,13 @@
     "dist:linux": "electron-builder --linux",
     "pack": "electron-builder --dir",
     "test": "node --test \"test/**/*.test.js\"",
-    "icons:check": "node tools/make-icons.js --check"
+    "icons:check": "node tools/make-icons.js --check",
+    "brand-icons": "node tools/make-brand-icons.js"
   },
   "devDependencies": {
     "electron": "^43.2.0",
-    "electron-builder": "^25.1.8"
+    "electron-builder": "^25.1.8",
+    "simple-icons": "^16.27.1"
   },
   "build": {
     "appId": "io.github.panebox",

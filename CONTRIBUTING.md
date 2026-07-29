@@ -33,7 +33,9 @@ Adding a service to the catalog is a one-line change in [`catalog.js`](catalog.j
 - `category` must be one of the values in `CATEGORIES`
 - `color` is only used for the generated letter avatar shown before the service reports its own favicon
 
-`npm test` enforces all four of those. No icon file is needed — Panebox picks up the real favicon from the service itself.
+`npm test` enforces all four of those. No icon file is needed: run `npm run brand-icons` and, if simple-icons carries that brand, its official mark is inlined into `icons.js` automatically. Otherwise the service gets a letter avatar until the site reports its own favicon.
+
+`icons.js` is generated — edit `tools/make-brand-icons.js`, never `icons.js` itself.
 
 ## Project layout
 
