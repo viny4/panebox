@@ -1147,6 +1147,48 @@ function commitManageOrder() {
   }
 }
 
+/** Settings → Shortcuts. Rendered from lib/shortcuts.js, not hand-listed here. */
+function renderShortcuts() {
+  const root = $('shortcut-list');
+  root.textContent = '';
+  const isMac = window.panebox.platform === 'darwin';
+
+  for (const section of window.SHORTCUTS.forPlatform(window.panebox.platform)) {
+    const heading = document.createElement('h4');
+    heading.className = 'shortcut-heading';
+    heading.textContent = section.title;
+    root.appendChild(heading);
+
+    for (const item of section.items) {
+      const row = document.createElement('div');
+      row.className = 'shortcut-row';
+
+      const label = document.createElement('span');
+      label.className = 'shortcut-label';
+      label.textContent = item.label;
+
+      const combo = document.createElement('span');
+      combo.className = 'shortcut-keys';
+
+      if (item.gesture) {
+        const g = document.createElement('span');
+        g.className = 'shortcut-gesture';
+        g.textContent = item.gesture;
+        combo.appendChild(g);
+      } else {
+        for (const token of item.keys) {
+          const key = document.createElement('kbd');
+          key.textContent = window.SHORTCUTS.keyLabel(token, isMac);
+          combo.appendChild(key);
+        }
+      }
+
+      row.append(label, combo);
+      root.appendChild(row);
+    }
+  }
+}
+
 function renderWorkspaceList() {
   const list = $('workspace-list');
   list.textContent = '';
@@ -1904,6 +1946,7 @@ document.addEventListener('DOMContentLoaded', () => {
     fillSettingsForm();
     renderManageList();
     renderWorkspaceList();
+    renderShortcuts();
     openModal('settings-modal');
   });
   $('btn-workspace').addEventListener('click', (e) => {
@@ -2070,6 +2113,7 @@ document.addEventListener('DOMContentLoaded', () => {
     fillSettingsForm();
     renderManageList();
     renderWorkspaceList();
+    renderShortcuts();
     openModal('settings-modal');
   });
   window.panebox.menu.onOpenAdd(() => {
