@@ -74,6 +74,7 @@ contextBridge.exposeInMainWorld('panebox', {
     onOpenAdd: on('pb:open-add'),
     onOpenFind: on('pb:open-find'),
     onOpenTaskManager: on('pb:open-taskmanager'),
+    onToggleSidebar: on('pb:toggle-sidebar'),
     onToggleTodo: on('pb:toggle-todo'),
     onReloadActive: on('pb:reload-active'),
     onCycle: on('pb:cycle'),

@@ -582,3 +582,28 @@ webview.active { visibility: visible; }
 @keyframes pb-spin {
   to { transform: rotate(360deg); }
 }
+
+/* ------------------------------------------------------- collapsible sidebar */
+
+/* Cmd/Ctrl+B, same as an editor. Width animates so the workspace grows into
+   the space rather than snapping. */
+#sidebar {
+  transition: width .16s ease, opacity .16s ease;
+  overflow: hidden;
+}
+body.sidebar-hidden #sidebar {
+  width: 0;
+  opacity: 0;
+  border-right-color: transparent;
+  pointer-events: none;
+}
+/* The traffic lights need their drag strip even with the sidebar collapsed. */
+body.sidebar-hidden.platform-darwin #topbar { padding-left: 84px; }
+
+/* While reordering, the tab follows the cursor and nothing else reacts. */
+.app-tab-wrapper.dragging { opacity: .55; transform: scale(.94); }
+.app-tab-wrapper.dragging .app-tooltip { display: none; }
+body.reordering { cursor: grabbing; }
+body.reordering .app-tab,
+body.reordering .app-tab-wrapper { cursor: grabbing; }
+body.reordering webview { pointer-events: none; }

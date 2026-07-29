@@ -149,7 +149,6 @@ function renderSidebar() {
   for (const app of visible) {
     const wrapper = document.createElement('div');
     wrapper.className = 'app-tab-wrapper';
-    wrapper.draggable = true;
     wrapper.dataset.appId = app.id;
     wrapper.title = 'Drag to reorder';
 
@@ -186,28 +185,7 @@ function renderSidebar() {
       openServiceModal(app.id);
     });
 
-    wrapper.addEventListener('dragstart', (e) => {
-      state.dragSourceId = app.id;
-      wrapper.classList.add('dragging');
-      e.dataTransfer.effectAllowed = 'move';
-      // Firefox/Chromium need data set for the drag to start at all.
-      e.dataTransfer.setData('text/plain', app.id);
-    });
-    wrapper.addEventListener('dragend', () => {
-      wrapper.classList.remove('dragging');
-      document.querySelectorAll('.drag-over').forEach((n) => n.classList.remove('drag-over'));
-      state.dragSourceId = null;
-    });
-    wrapper.addEventListener('dragover', (e) => {
-      e.preventDefault();
-      if (state.dragSourceId && state.dragSourceId !== app.id) wrapper.classList.add('drag-over');
-    });
-    wrapper.addEventListener('dragleave', () => wrapper.classList.remove('drag-over'));
-    wrapper.addEventListener('drop', (e) => {
-      e.preventDefault();
-      wrapper.classList.remove('drag-over');
-      reorderApps(state.dragSourceId, app.id);
-    });
+    wrapper.addEventListener('pointerdown', (e) => beginReorder(e, wrapper));
 
     wrapper.append(tab, del, tooltip);
     list.appendChild(wrapper);
@@ -242,16 +220,79 @@ function renderSidebar() {
   refreshBadges();
 }
 
-function reorderApps(sourceId, targetId) {
-  if (!sourceId || sourceId === targetId) return;
-  const list = apps();
-  const from = list.findIndex((a) => a.id === sourceId);
-  const to = list.findIndex((a) => a.id === targetId);
-  if (from < 0 || to < 0) return;
-  const [moved] = list.splice(from, 1);
-  list.splice(to, 0, moved);
+/**
+ * Reordering, driven by pointer events rather than HTML5 drag-and-drop.
+ *
+ * The native API looked fine in tests and did nothing in practice — synthetic
+ * DragEvents dispatch straight to the node and prove very little. Pointer
+ * events behave the same way in a test as under a real mouse, and they let the
+ * tab move under the cursor instead of only showing a drop line.
+ *
+ * A short movement threshold keeps an ordinary click on the tab working.
+ */
+function beginReorder(event, wrapper) {
+  if (event.button !== 0) return;
+
+  const list = $('app-list');
+  const startY = event.clientY;
+  let dragging = false;
+
+  const onMove = (e) => {
+    if (!dragging) {
+      if (Math.abs(e.clientY - startY) < 6) return; // still a click, not a drag
+      dragging = true;
+      wrapper.classList.add('dragging');
+      document.body.classList.add('reordering');
+    }
+
+    const others = [...list.querySelectorAll('.app-tab-wrapper[data-app-id]')].filter(
+      (n) => n !== wrapper,
+    );
+    const before = others.find((n) => {
+      const r = n.getBoundingClientRect();
+      return e.clientY < r.top + r.height / 2;
+    });
+
+    if (before) {
+      list.insertBefore(wrapper, before);
+    } else {
+      // past the last service, but always above the add tile
+      const addTile = list.querySelector('.app-add-tile');
+      list.insertBefore(wrapper, addTile ? addTile.parentElement : null);
+    }
+  };
+
+  const onUp = () => {
+    document.removeEventListener('pointermove', onMove);
+    document.removeEventListener('pointerup', onUp);
+    if (!dragging) return;
+    wrapper.classList.remove('dragging');
+    document.body.classList.remove('reordering');
+    commitSidebarOrder();
+  };
+
+  document.addEventListener('pointermove', onMove);
+  document.addEventListener('pointerup', onUp);
+}
+
+/**
+ * Writes the on-screen order back to config.
+ *
+ * Only the services visible in the current workspace are on screen, so the
+ * others must keep their positions — we refill just the visible slots.
+ */
+function commitSidebarOrder() {
+  const order = [...$('app-list').querySelectorAll('.app-tab-wrapper[data-app-id]')].map(
+    (n) => n.dataset.appId,
+  );
+  const visible = new Set(order);
+  const reordered = order.map((id) => appById(id)).filter(Boolean);
+
+  let next = 0;
+  state.config.apps = apps().map((app) =>
+    visible.has(app.id) ? reordered[next++] || app : app,
+  );
   saveApps();
-  renderSidebar();
 }
 
 // -------------------------------------------------------------- webviews
@@ -537,6 +578,13 @@ function addApp({ name, url, serviceKey, color }) {
     alert('That does not look like a valid URL.');
     return null;
   }
+
+  // A second copy of the same service is a feature (two accounts), but two
+  // rows reading "Gemini" is not — number them so they can be told apart.
+  const sameName = apps().filter(
+    (a) => a.name === finalName || a.name.startsWith(`${finalName} `),
+  ).length;
+  if (sameName > 0) finalName = `${finalName} ${sameName + 1}`;
 
   const app = {
     id: `app-${Date.now()}-${Math.floor(Math.random() * 10000)}`,
@@ -1312,6 +1360,17 @@ function updateDndButton() {
   $('btn-dnd').classList.toggle('on', !!settings().dnd);
 }
 
+function applySidebarVisibility(hidden) {
+  document.body.classList.toggle('sidebar-hidden', !!hidden);
+}
+
+function toggleSidebar() {
+  const next = !document.body.classList.contains('sidebar-hidden');
+  applySidebarVisibility(next);
+  settings().sidebarHidden = next;
+  window.panebox.config.setKey('settings.sidebarHidden', next);
+}
+
 function applyTheme(isDark) {
   document.documentElement.setAttribute('data-theme', isDark ? 'dark' : 'light');
 }
@@ -1367,6 +1426,7 @@ async function init() {
   migrateLegacy();
 
   applyTheme(await window.panebox.theme.isDark());
+  applySidebarVisibility(settings().sidebarHidden);
   fillSettingsForm();
   updateDndButton();
   bindSettingsControls();
@@ -1535,6 +1595,10 @@ document.addEventListener('DOMContentLoaded', () => {
   // --- keyboard ---
   window.addEventListener('keydown', (e) => {
     if (e.key === 'Escape') {
+      if (!$('workspace-menu').hidden) {
+        $('workspace-menu').hidden = true;
+        return;
+      }
       if (!$('find-bar').hidden) return closeFind();
       document.querySelectorAll('.modal-overlay.active').forEach((m) => {
         if (m.id !== 'screen-modal') closeModal(m.id);
@@ -1543,7 +1607,10 @@ document.addEventListener('DOMContentLoaded', () => {
     }
     if (!(e.metaKey || e.ctrlKey)) return;
 
-    if (e.shiftKey && e.key.toLowerCase() === 'r') {
+    if (e.key.toLowerCase() === 'b' && !e.shiftKey) {
+      e.preventDefault();
+      toggleSidebar();
+    } else if (e.shiftKey && e.key.toLowerCase() === 'r') {
       e.preventDefault();
       window.panebox.window.relaunch();
     } else if (e.key >= '1' && e.key <= '9') {
@@ -1610,6 +1677,7 @@ document.addEventListener('DOMContentLoaded', () => {
   });
   window.panebox.menu.onOpenFind(openFind);
   window.panebox.menu.onOpenTaskManager(startTaskManager);
+  window.panebox.menu.onToggleSidebar(toggleSidebar);
   window.panebox.menu.onToggleTodo(() => {
     $('todo-panel').hidden = !$('todo-panel').hidden;
   });
