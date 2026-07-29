@@ -185,7 +185,7 @@ function renderSidebar() {
       openServiceModal(app.id);
     });
 
-    wrapper.addEventListener('pointerdown', (e) => beginReorder(e, wrapper));
+    wrapper.addEventListener('pointerdown', (e) => beginReorder(e, wrapper));  // sidebar
 
     wrapper.append(tab, del, tooltip);
     list.appendChild(wrapper);
@@ -230,10 +230,12 @@ function renderSidebar() {
  *
  * A short movement threshold keeps an ordinary click on the tab working.
  */
-function beginReorder(event, wrapper) {
+function beginReorder(event, wrapper, listEl, commit, itemSelector) {
   if (event.button !== 0) return;
 
-  const list = $('app-list');
+  const list = listEl || $('app-list');
+  const selector = itemSelector || '.app-tab-wrapper[data-app-id]';
+  const onCommit = commit || commitSidebarOrder;
   const startY = event.clientY;
   let dragging = false;
 
@@ -245,9 +247,7 @@ function beginReorder(event, wrapper) {
       document.body.classList.add('reordering');
     }
 
-    const others = [...list.querySelectorAll('.app-tab-wrapper[data-app-id]')].filter(
-      (n) => n !== wrapper,
-    );
+    const others = [...list.querySelectorAll(selector)].filter((n) => n !== wrapper);
     const before = others.find((n) => {
       const r = n.getBoundingClientRect();
       return e.clientY < r.top + r.height / 2;
@@ -268,7 +268,7 @@ function beginReorder(event, wrapper) {
     if (!dragging) return;
     wrapper.classList.remove('dragging');
     document.body.classList.remove('reordering');
-    commitSidebarOrder();
+    onCommit();
   };
 
   document.addEventListener('pointermove', onMove);
@@ -718,9 +718,21 @@ function renderManageList() {
   for (const app of apps()) {
     const row = document.createElement('div');
     row.className = 'manage-app-row';
+    row.dataset.appId = app.id;
 
     const info = document.createElement('div');
     info.className = 'manage-app-info';
+
+    // Reordering belongs where the list is, not only in the sidebar.
+    const grip = document.createElement('span');
+    grip.className = 'row-grip';
+    grip.title = 'Drag to reorder';
+    grip.textContent = '⠿';
+    grip.addEventListener('pointerdown', (e) =>
+      beginReorder(e, row, $('manage-app-list'), commitManageOrder, '.manage-app-row[data-app-id]'),
+    );
+    info.appendChild(grip);
+
     info.appendChild(iconNode(app));
 
     const details = document.createElement('div');
@@ -756,6 +768,19 @@ function renderManageList() {
 
     row.append(info, actions);
     list.appendChild(row);
+  }
+}
+
+/** The settings list shows every service, so its order is the whole order. */
+function commitManageOrder() {
+  const order = [...$('manage-app-list').querySelectorAll('.manage-app-row[data-app-id]')].map(
+    (n) => n.dataset.appId,
+  );
+  const reordered = order.map((id) => appById(id)).filter(Boolean);
+  if (reordered.length === apps().length) {
+    state.config.apps = reordered;
+    saveApps();
+    renderSidebar();
   }
 }
 

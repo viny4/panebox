@@ -607,3 +607,11 @@ body.reordering { cursor: grabbing; }
 body.reordering .app-tab,
 body.reordering .app-tab-wrapper { cursor: grabbing; }
 body.reordering webview { pointer-events: none; }
+
+/* Reorder handle in the settings service list. */
+.row-grip {
+  cursor: grab; color: var(--text-dim); font-size: 15px; line-height: 1;
+  padding: 2px 4px; margin-right: 2px; user-select: none; flex-shrink: 0;
+}
+.row-grip:hover { color: var(--text); }
+.manage-app-row.dragging { opacity: .5; background: var(--bg-hover); }
