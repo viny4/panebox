@@ -18,6 +18,9 @@ const state = {
   config: null,
   activeId: null,
   webviews: new Map(), // appId -> <webview>
+  panes: new Map(), // appId -> wrapper element holding the webview
+  split: false, // grid mode: every service in the workspace on screen at once
+  focusedId: null, // in grid mode, the pane spotlighted at full size
   ready: new Set(), // appIds whose webview has emitted dom-ready
   tabs: new Map(), // appId -> { tab, badgeEl }
   badges: new Map(), // appId -> number (-1 means "dot")
@@ -295,6 +298,82 @@ function commitSidebarOrder() {
   saveApps();
 }
 
+// ------------------------------------------------------------------ grid mode
+
+/**
+ * Columns for n panes, following the shape video-call grids settle on: keep
+ * tiles as close to square as the space allows rather than stretching them.
+ */
+function gridColumns(count) {
+  if (count <= 1) return 1;
+  if (count <= 4) return 2;
+  if (count <= 9) return 3;
+  if (count <= 16) return 4;
+  return 5;
+}
+
+/** Sessions are never touched here — panes only show and hide. */
+function setSplit(on) {
+  state.split = !!on;
+  if (!state.split) state.focusedId = null;
+
+  const container = $('view-container');
+  container.classList.toggle('split', state.split);
+  $('btn-split').classList.toggle('on', state.split);
+
+  if (!state.split) {
+    for (const [id, pane] of state.panes) {
+      pane.classList.remove('focused', 'thumb');
+      pane.classList.toggle('active', id === state.activeId);
+    }
+    container.style.removeProperty('--grid-cols');
+    return;
+  }
+
+  // Everything in the current workspace goes on screen, so a group doubles as
+  // a dashboard. Waking them all costs memory, hence the cap.
+  const wanted = visibleApps().slice(0, 12);
+  for (const app of wanted) {
+    if (!state.webviews.has(app.id)) createWebview(app);
+    state.lastActive.set(app.id, Date.now());
+  }
+
+  const shown = new Set(wanted.map((a) => a.id));
+  for (const [id, pane] of state.panes) {
+    pane.classList.toggle('active', shown.has(id));
+  }
+  container.style.setProperty('--grid-cols', gridColumns(shown.size));
+  applySplitFocus();
+}
+
+function setSplitFocus(appId) {
+  if (!state.split) return;
+  state.focusedId = appId;
+  applySplitFocus();
+}
+
+function applySplitFocus() {
+  const container = $('view-container');
+  const focused = state.focusedId;
+  container.classList.toggle('has-focus', !!focused);
+
+  let thumbs = 0;
+  for (const [id, pane] of state.panes) {
+    const isThumb = !!focused && id !== focused && pane.classList.contains('active');
+    pane.classList.toggle('focused', id === focused);
+    pane.classList.toggle('thumb', isThumb);
+    if (isThumb) thumbs++;
+  }
+
+  // The thumbnail strip needs one column per thumbnail; the focused pane spans
+  // all of them on the row above.
+  container.style.setProperty('--thumb-count', Math.max(thumbs, 1));
+}
+
+function toggleSplit() {
+  setSplit(!state.split);
+}
+
 // -------------------------------------------------------------- icons (page)
 
 /**
@@ -415,7 +494,47 @@ function createWebview(app) {
     console.warn(`[${app.name}] failed to load: ${e.errorDescription} (${e.validatedURL})`);
   });
 
-  $('view-container').appendChild(wv);
+  // The webview lives inside a pane wrapper so grid mode can give it a header.
+  // Built at creation, never moved afterwards: relocating a <webview> in the
+  // DOM tears down its process and reloads the page.
+  const pane = document.createElement('div');
+  pane.className = 'pane';
+  pane.dataset.appId = app.id;
+
+  const head = document.createElement('div');
+  head.className = 'pane-head';
+
+  const label = document.createElement('span');
+  label.className = 'pane-name';
+  label.textContent = app.name;
+
+  const focusBtn = document.createElement('button');
+  focusBtn.className = 'pane-btn';
+  focusBtn.title = 'Expand';
+  focusBtn.textContent = '⤢';
+  focusBtn.addEventListener('click', (e) => {
+    e.stopPropagation();
+    setSplitFocus(state.focusedId === app.id ? null : app.id);
+  });
+
+  const openBtn = document.createElement('button');
+  openBtn.className = 'pane-btn';
+  openBtn.title = 'Open on its own';
+  openBtn.textContent = '↗';
+  openBtn.addEventListener('click', (e) => {
+    e.stopPropagation();
+    setSplit(false);
+    switchTab(app.id);
+  });
+
+  head.append(label, focusBtn, openBtn);
+  head.addEventListener('dblclick', () =>
+    setSplitFocus(state.focusedId === app.id ? null : app.id),
+  );
+
+  pane.append(head, wv);
+  $('view-container').appendChild(pane);
+  state.panes.set(app.id, pane);
   state.webviews.set(app.id, wv);
   state.lastActive.set(app.id, Date.now());
   return wv;
@@ -424,7 +543,10 @@ function createWebview(app) {
 function destroyWebview(appId) {
   const wv = state.webviews.get(appId);
   if (!wv) return;
-  wv.remove();
+  const pane = state.panes.get(appId);
+  if (pane) pane.remove();
+  else wv.remove();
+  state.panes.delete(appId);
   state.webviews.delete(appId);
   state.ready.delete(appId);
   state.badges.delete(appId);
@@ -442,8 +564,9 @@ function switchTab(appId) {
 
   if (!state.webviews.has(appId)) createWebview(app);
 
-  for (const [id, view] of state.webviews) {
-    view.classList.toggle('active', id === appId);
+  if (state.split) setSplit(false);
+  for (const [id, pane] of state.panes) {
+    pane.classList.toggle('active', id === appId);
   }
   for (const [id, { tab }] of state.tabs) {
     tab.classList.toggle('active', id === appId);
@@ -604,6 +727,7 @@ function hibernationTick() {
 
   for (const [appId] of state.webviews) {
     if (appId === state.activeId) continue;
+    if (state.split && state.panes.get(appId)?.classList.contains('active')) continue;
     const app = appById(appId);
     if (!app || app.hibernate === false) continue;
     const last = state.lastActive.get(appId) || now;
@@ -1154,6 +1278,9 @@ function saveServiceModal() {
     if (state.activeId === app.id) switchTab(app.id);
   }
 
+  const pane = state.panes.get(app.id);
+  if (pane) pane.querySelector('.pane-name').textContent = app.name;
+
   renderSidebar();
   renderManageList();
   closeModal('service-modal');
@@ -1557,6 +1684,7 @@ document.addEventListener('DOMContentLoaded', () => {
     updateDndButton();
     $('set-dnd').checked = next;
   });
+  $('btn-split').addEventListener('click', toggleSplit);
   $('btn-find').addEventListener('click', openFind);
   $('btn-todo').addEventListener('click', () => {
     $('todo-panel').hidden = !$('todo-panel').hidden;
@@ -1679,6 +1807,8 @@ document.addEventListener('DOMContentLoaded', () => {
         $('workspace-menu').hidden = true;
         return;
       }
+      if (state.focusedId) return setSplitFocus(null);
+      if (state.split) return setSplit(false);
       if (!$('find-bar').hidden) return closeFind();
       document.querySelectorAll('.modal-overlay.active').forEach((m) => {
         if (m.id !== 'screen-modal') closeModal(m.id);
@@ -1687,7 +1817,10 @@ document.addEventListener('DOMContentLoaded', () => {
     }
     if (!(e.metaKey || e.ctrlKey)) return;
 
-    if (e.key.toLowerCase() === 'b' && !e.shiftKey) {
+    if (e.shiftKey && e.key.toLowerCase() === 's') {
+      e.preventDefault();
+      toggleSplit();
+    } else if (e.key.toLowerCase() === 'b' && !e.shiftKey) {
       e.preventDefault();
       toggleSidebar();
     } else if (e.shiftKey && e.key.toLowerCase() === 'r') {
@@ -1758,6 +1891,7 @@ document.addEventListener('DOMContentLoaded', () => {
   window.panebox.menu.onOpenFind(openFind);
   window.panebox.menu.onOpenTaskManager(startTaskManager);
   window.panebox.menu.onToggleSidebar(toggleSidebar);
+  window.panebox.menu.onToggleSplit(toggleSplit);
   window.panebox.menu.onToggleTodo(() => {
     $('todo-panel').hidden = !$('todo-panel').hidden;
   });

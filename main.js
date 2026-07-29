@@ -451,6 +451,7 @@ function buildAppMenu() {
         { label: 'Previous Service', accelerator: 'CmdOrCtrl+Shift+Tab', click: () => send('pb:cycle', -1) },
         { type: 'separator' },
         { label: 'Toggle Sidebar', accelerator: 'CmdOrCtrl+B', click: () => send('pb:toggle-sidebar') },
+        { label: 'Split View', accelerator: 'CmdOrCtrl+Shift+S', click: () => send('pb:toggle-split') },
         { label: 'Toggle Todo Panel', accelerator: 'CmdOrCtrl+T', click: () => send('pb:toggle-todo') },
         { label: 'Task Manager', accelerator: 'CmdOrCtrl+Shift+M', click: () => send('pb:open-taskmanager') },
         { type: 'separator' },
