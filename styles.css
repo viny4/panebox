@@ -527,3 +527,32 @@ webview.active { visibility: visible; }
 }
 #update-progress[hidden] { display: none; }
 #update-bar { width: 0; height: 100%; background: #fff; transition: width .25s ease; }
+
+/* ------------------------------------------------ sidebar: drag + add tile */
+
+/* Drag-to-reorder existed but had no affordance, so it read as dead. */
+.app-tab-wrapper { cursor: grab; }
+.app-tab-wrapper:active { cursor: grabbing; }
+.app-tab-wrapper.dragging { cursor: grabbing; }
+.app-tab { cursor: pointer; }
+
+/* A clearer drop target than a 2px line. */
+.app-tab-wrapper.drag-over::before {
+  content: ''; position: absolute; left: -4px; right: -4px; top: -8px;
+  height: 3px; background: var(--accent); border-radius: 3px;
+  box-shadow: 0 0 8px var(--accent);
+}
+
+.app-add-tile {
+  width: 52px; height: 52px; border-radius: var(--radius-md);
+  background: transparent; border: 1px dashed var(--border);
+  display: flex; align-items: center; justify-content: center;
+  cursor: pointer; color: var(--text-dim); transition: all .18s ease;
+}
+.app-add-tile:hover {
+  background: var(--accent-gradient); color: #fff;
+  border-style: solid; border-color: transparent;
+  transform: translateY(-2px);
+}
+
+.modal-sub { display: block; font-size: 11.5px; color: var(--text-dim); margin-top: 2px; }

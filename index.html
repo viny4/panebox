@@ -33,12 +33,6 @@
       <div id="app-list" role="tablist" aria-label="Services"></div>
 
       <div class="sidebar-footer">
-        <button id="btn-add-app" class="btn-icon" title="Add service (Cmd/Ctrl+N)" aria-label="Add service">
-          <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2">
-            <line x1="12" y1="5" x2="12" y2="19"></line>
-            <line x1="5" y1="12" x2="19" y2="12"></line>
-          </svg>
-        </button>
         <button id="btn-settings" class="btn-icon" title="Settings (Cmd/Ctrl+,)" aria-label="Settings">
           <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2">
             <circle cx="12" cy="12" r="3"></circle>
@@ -116,7 +110,7 @@
   <div id="add-modal" class="modal-overlay" role="dialog" aria-modal="true" aria-labelledby="add-title">
     <div class="modal-card">
       <div class="modal-header">
-        <h3 id="add-title">Add a service</h3>
+        <div><h3 id="add-title">Add a service</h3><span id="add-target" class="modal-sub"></span></div>
         <button class="nav-btn" data-close="add-modal" aria-label="Close">✕</button>
       </div>
 
