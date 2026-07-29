@@ -30,7 +30,9 @@ function documented() {
   const out = new Set();
   for (const section of SHORTCUTS.SECTIONS) {
     for (const item of section.items) {
-      if (item.keys) out.add(normalize(item.keys.join('+')));
+      for (const combo of [item.keys, item.mac, item.win]) {
+        if (Array.isArray(combo)) out.add(normalize(combo.join('+')));
+      }
     }
   }
   return out;
@@ -71,13 +73,34 @@ test('the number-key shortcut is documented', () => {
   assert.ok(documented().has(normalize('mod+1')), 'Shortcuts tab must mention it');
 });
 
-test('mac-only entries are hidden on other platforms', () => {
-  const mac = SHORTCUTS.forPlatform('darwin');
-  const win = SHORTCUTS.forPlatform('win32');
-  const flat = (s) => s.flatMap((x) => x.items).map((i) => i.label);
+test('both platforms are listed for every keyboard row', () => {
+  for (const section of SHORTCUTS.rows()) {
+    if (section.mouse) continue;
+    for (const item of section.items) {
+      assert.ok(
+        item.mac !== undefined && item.win !== undefined,
+        `${item.label} must state both platforms, even if one is null`,
+      );
+    }
+  }
+});
 
-  assert.ok(flat(mac).includes('Quit'), 'Quit is a macOS menu item');
-  assert.ok(!flat(win).includes('Quit'), 'and should not be advertised on Windows');
+test('a binding that does not exist on a platform renders as unbound', () => {
+  // Electron's quit role registers no accelerator on Windows or Linux, so
+  // claiming Ctrl+Q there would be inventing one.
+  const quit = SHORTCUTS.rows()
+    .flatMap((s) => s.items)
+    .find((i) => i.label === 'Quit');
+  assert.deepStrictEqual(SHORTCUTS.render(quit.mac, true), ['⌘', 'Q']);
+  assert.strictEqual(SHORTCUTS.render(quit.win, false), null);
+});
+
+test('platform-specific keys render differently where they differ', () => {
+  const devtools = SHORTCUTS.rows()
+    .flatMap((s) => s.items)
+    .find((i) => i.label === 'Developer tools');
+  assert.deepStrictEqual(SHORTCUTS.render(devtools.mac, true), ['⌥', '⌘', 'I']);
+  assert.deepStrictEqual(SHORTCUTS.render(devtools.win, false), ['Ctrl', 'Shift', 'I']);
 });
 
 test('keys render with the right symbols per platform', () => {
@@ -92,7 +115,8 @@ test('every documented shortcut has a description', () => {
   for (const section of SHORTCUTS.SECTIONS) {
     for (const item of section.items) {
       assert.ok(item.label && item.label.length > 3, `missing label in ${section.title}`);
-      assert.ok(item.keys || item.gesture, `${item.label} has neither keys nor a gesture`);
+      const hasKeys = item.keys || item.mac || item.win;
+      assert.ok(hasKeys || item.gesture, `${item.label} has neither keys nor a gesture`);
     }
   }
 });

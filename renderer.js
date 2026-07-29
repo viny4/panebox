@@ -1147,13 +1147,43 @@ function commitManageOrder() {
   }
 }
 
-/** Settings → Shortcuts. Rendered from lib/shortcuts.js, not hand-listed here. */
+/** Settings → Shortcuts. Both platforms, so the list doubles as documentation. */
 function renderShortcuts() {
   const root = $('shortcut-list');
   root.textContent = '';
   const isMac = window.panebox.platform === 'darwin';
 
-  for (const section of window.SHORTCUTS.forPlatform(window.panebox.platform)) {
+  const legend = document.createElement('div');
+  legend.className = 'shortcut-legend';
+  const spacer = document.createElement('span');
+  const macCol = document.createElement('span');
+  macCol.textContent = 'macOS';
+  macCol.className = isMac ? 'current' : '';
+  const winCol = document.createElement('span');
+  winCol.textContent = 'Windows / Linux';
+  winCol.className = isMac ? '' : 'current';
+  legend.append(spacer, macCol, winCol);
+  root.appendChild(legend);
+
+  const keyGroup = (keys, current) => {
+    const cell = document.createElement('span');
+    cell.className = 'shortcut-keys' + (current ? ' current' : '');
+    if (!keys) {
+      const dash = document.createElement('span');
+      dash.className = 'shortcut-none';
+      dash.textContent = '—';
+      cell.appendChild(dash);
+      return cell;
+    }
+    for (const k of keys) {
+      const kbd = document.createElement('kbd');
+      kbd.textContent = k;
+      cell.appendChild(kbd);
+    }
+    return cell;
+  };
+
+  for (const section of window.SHORTCUTS.rows()) {
     const heading = document.createElement('h4');
     heading.className = 'shortcut-heading';
     heading.textContent = section.title;
@@ -1161,29 +1191,23 @@ function renderShortcuts() {
 
     for (const item of section.items) {
       const row = document.createElement('div');
-      row.className = 'shortcut-row';
+      row.className = 'shortcut-row' + (section.mouse ? ' gesture-row' : '');
 
       const label = document.createElement('span');
       label.className = 'shortcut-label';
       label.textContent = item.label;
-
-      const combo = document.createElement('span');
-      combo.className = 'shortcut-keys';
+      row.appendChild(label);
 
       if (item.gesture) {
         const g = document.createElement('span');
         g.className = 'shortcut-gesture';
         g.textContent = item.gesture;
-        combo.appendChild(g);
+        row.appendChild(g);
       } else {
-        for (const token of item.keys) {
-          const key = document.createElement('kbd');
-          key.textContent = window.SHORTCUTS.keyLabel(token, isMac);
-          combo.appendChild(key);
-        }
+        row.appendChild(keyGroup(window.SHORTCUTS.render(item.mac, true), isMac));
+        row.appendChild(keyGroup(window.SHORTCUTS.render(item.win, false), !isMac));
       }
 
-      row.append(label, combo);
       root.appendChild(row);
     }
   }
