@@ -279,8 +279,20 @@ function createWebview(app) {
     $('url-input').value = url;
     $('url-lock').classList.toggle('insecure', !/^https:/i.test(url));
   };
-  wv.addEventListener('did-navigate', syncUrl);
-  wv.addEventListener('did-navigate-in-page', syncUrl);
+  wv.addEventListener('did-navigate', () => {
+    syncUrl();
+    refreshNavState();
+  });
+  wv.addEventListener('did-navigate-in-page', () => {
+    syncUrl();
+    refreshNavState();
+  });
+
+  wv.addEventListener('did-start-loading', () => setLoading(app.id, true));
+  wv.addEventListener('did-stop-loading', () => {
+    setLoading(app.id, false);
+    refreshNavState();
+  });
 
   wv.addEventListener('page-title-updated', (e) => {
     // A service that reports exact counts via navigator.setAppBadge is always
@@ -345,6 +357,8 @@ function switchTab(appId) {
 
   $('url-input').value = withWebview(appId, (view) => view.getURL()) || app.url;
   $('btn-mute').classList.toggle('off', !!app.muted);
+  setLoading(appId, withWebview(appId, (wv) => wv.isLoading(), false));
+  refreshNavState();
   closeFind();
 }
 
@@ -359,6 +373,27 @@ function cycle(delta) {
 // ------------------------------------------------------------- badges
 
 const parseBadgeFromTitle = (title) => window.BADGE.parseBadgeFromTitle(title);
+
+/**
+ * Keeps the toolbar honest.
+ *
+ * Back and forward used to look clickable even with no history, and reload gave
+ * no feedback at all — so a working button was indistinguishable from a broken
+ * one. Now they disable when there is nowhere to go, and reload spins while the
+ * page is actually loading.
+ */
+function refreshNavState() {
+  const canBack = withWebview(state.activeId, (wv) => wv.canGoBack(), false);
+  const canFwd = withWebview(state.activeId, (wv) => wv.canGoForward(), false);
+  $('btn-back').disabled = !canBack;
+  $('btn-forward').disabled = !canFwd;
+}
+
+function setLoading(appId, loading) {
+  if (appId !== state.activeId) return;
+  $('btn-reload').classList.toggle('loading', loading);
+  $('btn-reload').title = loading ? 'Stop loading' : 'Reload (Cmd/Ctrl+R)';
+}
 
 function setBadge(appId, count, source = 'title') {
   const raw = Number(count);
@@ -1365,7 +1400,7 @@ document.addEventListener('DOMContentLoaded', () => {
     }),
   );
   $('btn-reload').addEventListener('click', () =>
-    withWebview(state.activeId, (wv) => wv.reload()),
+    withWebview(state.activeId, (wv) => (wv.isLoading() ? wv.stop() : wv.reload())),
   );
   $('btn-mute').addEventListener('click', () => {
     const app = appById(state.activeId);
