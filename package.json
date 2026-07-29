@@ -1,7 +1,7 @@
 {
   "name": "panebox",
   "productName": "Panebox",
-  "version": "2.1.0",
+  "version": "2.1.1",
   "description": "A small, private, open-source desktop deck for your web apps — AI tools, chat, mail and more in one window.",
   "main": "main.js",
   "license": "MIT",
@@ -130,7 +130,8 @@
         "repo": "panebox",
         "releaseType": "draft"
       }
-    ]
+    ],
+    "afterPack": "./tools/after-pack.js"
   },
   "dependencies": {
     "electron-updater": "^6.8.9"

@@ -95,3 +95,32 @@ test('replace() swaps the config wholesale', () => {
   assert.strictEqual(store.get('apps').length, 1);
   assert.strictEqual(store.get('settings.theme'), 'light');
 });
+
+test('a corrupt config is preserved, not silently overwritten', () => {
+  const file = tempFile();
+  fs.writeFileSync(file, JSON.stringify({ apps: [{ id: 'mine', name: 'Mine', url: 'https://a.test' }] }));
+
+  // Load once so a backup exists, then corrupt the live file.
+  createStore(file);
+  fs.writeFileSync(file, '{ truncated wri');
+
+  const store = createStore(file);
+
+  const dir = path.dirname(file);
+  const quarantined = fs.readdirSync(dir).filter((f) => f.includes('.corrupt-'));
+  assert.strictEqual(quarantined.length, 1, 'the unreadable file must be kept, not discarded');
+
+  // And the last good state comes back rather than defaults.
+  assert.strictEqual(store.get('apps').length, 1);
+  assert.strictEqual(store.get('apps')[0].name, 'Mine');
+});
+
+test('a good load leaves a backup behind', async () => {
+  const file = tempFile();
+  const store = createStore(file);
+  store.set('settings.windowTitle', 'Keep me');
+  await flushed();
+
+  createStore(file); // second load writes the backup
+  assert.ok(fs.existsSync(`${file}.backup`), 'expected a .backup alongside the config');
+});
