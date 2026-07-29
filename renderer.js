@@ -18,6 +18,10 @@ const state = {
   config: null,
   activeId: null,
   webviews: new Map(), // appId -> <webview>
+  panes: new Map(), // appId -> wrapper element holding the webview
+  split: false, // grid mode
+  splitIds: new Set(), // which services are in the grid — chosen, not implied
+  focusedId: null, // in grid mode, the pane spotlighted at full size
   ready: new Set(), // appIds whose webview has emitted dom-ready
   tabs: new Map(), // appId -> { tab, badgeEl }
   badges: new Map(), // appId -> number (-1 means "dot")
@@ -149,8 +153,8 @@ function renderSidebar() {
   for (const app of visible) {
     const wrapper = document.createElement('div');
     wrapper.className = 'app-tab-wrapper';
-    wrapper.draggable = true;
     wrapper.dataset.appId = app.id;
+    wrapper.title = 'Drag to reorder';
 
     const tab = document.createElement('div');
     tab.className = 'app-tab' + (app.id === state.activeId ? ' active' : '');
@@ -175,55 +179,407 @@ function renderSidebar() {
       }
     });
 
+    if (state.split) {
+      tab.classList.toggle('in-split', state.splitIds.has(app.id));
+    }
+
     const tooltip = document.createElement('div');
     tooltip.className = 'app-tooltip';
-    tooltip.textContent = app.name;
+    tooltip.textContent = state.split
+      ? `${state.splitIds.has(app.id) ? 'Remove from' : 'Add to'} split — ${app.name}`
+      : app.name;
 
-    tab.addEventListener('click', () => switchTab(app.id));
+    tab.addEventListener('click', () => {
+      if (state.split) toggleInSplit(app.id);
+      else switchTab(app.id);
+    });
     tab.addEventListener('contextmenu', (e) => {
       e.preventDefault();
       openServiceModal(app.id);
     });
 
-    wrapper.addEventListener('dragstart', (e) => {
-      state.dragSourceId = app.id;
-      wrapper.classList.add('dragging');
-      e.dataTransfer.effectAllowed = 'move';
-      // Firefox/Chromium need data set for the drag to start at all.
-      e.dataTransfer.setData('text/plain', app.id);
-    });
-    wrapper.addEventListener('dragend', () => {
-      wrapper.classList.remove('dragging');
-      document.querySelectorAll('.drag-over').forEach((n) => n.classList.remove('drag-over'));
-      state.dragSourceId = null;
-    });
-    wrapper.addEventListener('dragover', (e) => {
-      e.preventDefault();
-      if (state.dragSourceId && state.dragSourceId !== app.id) wrapper.classList.add('drag-over');
-    });
-    wrapper.addEventListener('dragleave', () => wrapper.classList.remove('drag-over'));
-    wrapper.addEventListener('drop', (e) => {
-      e.preventDefault();
-      wrapper.classList.remove('drag-over');
-      reorderApps(state.dragSourceId, app.id);
-    });
+    wrapper.addEventListener('pointerdown', (e) => beginReorder(e, wrapper));  // sidebar
 
     wrapper.append(tab, del, tooltip);
     list.appendChild(wrapper);
     state.tabs.set(app.id, { tab, badgeEl: badge });
   }
 
+  // The add button lives with the services, not stranded in the footer — it is
+  // where you look when you want another one.
+  const addWrap = document.createElement('div');
+  addWrap.className = 'app-tab-wrapper';
+
+  const addTile = document.createElement('button');
+  addTile.className = 'app-add-tile';
+  addTile.setAttribute('aria-label', 'Add a service');
+  addTile.innerHTML =
+    '<svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" ' +
+    'stroke-width="2" stroke-linecap="round"><line x1="12" y1="5" x2="12" y2="19"></line>' +
+    '<line x1="5" y1="12" x2="19" y2="12"></line></svg>';
+  addTile.addEventListener('click', () => {
+    renderCatalog();
+    openModal('add-modal');
+  });
+
+  const addTip = document.createElement('div');
+  addTip.className = 'app-tooltip';
+  const ws = activeWorkspace();
+  addTip.textContent = ws && ws.appIds ? `Add to ${ws.name}` : 'Add a service';
+
+  addWrap.append(addTile, addTip);
+  list.appendChild(addWrap);
+
   refreshBadges();
 }
 
-function reorderApps(sourceId, targetId) {
-  if (!sourceId || sourceId === targetId) return;
-  const list = apps();
-  const from = list.findIndex((a) => a.id === sourceId);
-  const to = list.findIndex((a) => a.id === targetId);
-  if (from < 0 || to < 0) return;
-  const [moved] = list.splice(from, 1);
-  list.splice(to, 0, moved);
+/**
+ * Reordering, driven by pointer events rather than HTML5 drag-and-drop.
+ *
+ * The native API looked fine in tests and did nothing in practice — synthetic
+ * DragEvents dispatch straight to the node and prove very little. Pointer
+ * events behave the same way in a test as under a real mouse, and they let the
+ * tab move under the cursor instead of only showing a drop line.
+ *
+ * A short movement threshold keeps an ordinary click on the tab working.
+ */
+function beginReorder(event, wrapper, listEl, commit, itemSelector) {
+  if (event.button !== 0) return;
+
+  const list = listEl || $('app-list');
+  const selector = itemSelector || '.app-tab-wrapper[data-app-id]';
+  const onCommit = commit || commitSidebarOrder;
+  const startY = event.clientY;
+  let dragging = false;
+
+  const sidebarRight = $('sidebar').getBoundingClientRect().right;
+  const appId = wrapper.dataset.appId;
+  const canDropIntoGrid = state.split && appId && !state.splitIds.has(appId);
+  let overGrid = false;
+
+  const onMove = (e) => {
+    if (!dragging) {
+      if (Math.abs(e.clientY - startY) < 6 && Math.abs(e.clientX - startX) < 6) return;
+      dragging = true;
+      wrapper.classList.add('dragging');
+      document.body.classList.add('reordering');
+    }
+
+    // Dragged out of the sidebar and into the grid: that means "add a pane",
+    // not "reorder".
+    if (canDropIntoGrid) {
+      overGrid = e.clientX > sidebarRight + 12;
+      $('view-container').classList.toggle('drop-target', overGrid);
+      if (overGrid) return; // don't shuffle the sidebar while aiming at the grid
+    }
+
+    const others = [...list.querySelectorAll(selector)].filter((n) => n !== wrapper);
+    const before = others.find((n) => {
+      const r = n.getBoundingClientRect();
+      return e.clientY < r.top + r.height / 2;
+    });
+
+    if (before) {
+      list.insertBefore(wrapper, before);
+    } else {
+      // past the last service, but always above the add tile
+      const addTile = list.querySelector('.app-add-tile');
+      list.insertBefore(wrapper, addTile ? addTile.parentElement : null);
+    }
+  };
+
+  const onUp = () => {
+    document.removeEventListener('pointermove', onMove);
+    document.removeEventListener('pointerup', onUp);
+    $('view-container').classList.remove('drop-target');
+    if (!dragging) return;
+    wrapper.classList.remove('dragging');
+    document.body.classList.remove('reordering');
+
+    if (overGrid && canDropIntoGrid) {
+      renderSidebar(); // undo any shuffling that happened on the way out
+      toggleInSplit(appId);
+      return;
+    }
+    onCommit();
+  };
+
+  document.addEventListener('pointermove', onMove);
+  document.addEventListener('pointerup', onUp);
+}
+
+/**
+ * Writes the on-screen order back to config.
+ *
+ * Only the services visible in the current workspace are on screen, so the
+ * others must keep their positions — we refill just the visible slots.
+ */
+function commitSidebarOrder() {
+  const order = [...$('app-list').querySelectorAll('.app-tab-wrapper[data-app-id]')].map(
+    (n) => n.dataset.appId,
+  );
+  const visible = new Set(order);
+  const reordered = order.map((id) => appById(id)).filter(Boolean);
+
+  let next = 0;
+  state.config.apps = apps().map((app) =>
+    visible.has(app.id) ? reordered[next++] || app : app,
+  );
+  saveApps();
+}
+
+// ------------------------------------------------------------------ grid mode
+
+/**
+ * Columns for n panes, following the shape video-call grids settle on: keep
+ * tiles as close to square as the space allows rather than stretching them.
+ */
+function gridColumns(count) {
+  if (count <= 1) return 1;
+  if (count <= 4) return 2;
+  if (count <= 9) return 3;
+  if (count <= 16) return 4;
+  return 5;
+}
+
+/** Sessions are never touched here — panes only show and hide. */
+function setSplit(on) {
+  state.split = !!on;
+  if (!state.split) state.focusedId = null;
+
+  const container = $('view-container');
+  container.classList.toggle('split', state.split);
+  $('btn-split').classList.toggle('on', state.split);
+
+  if (!state.split) {
+    const adder = container.querySelector('.pane-add');
+    if (adder) adder.classList.remove('active');
+    for (const [id, pane] of state.panes) {
+      pane.classList.remove('focused', 'thumb');
+      pane.classList.toggle('active', id === state.activeId);
+    }
+    container.style.removeProperty('--grid-cols');
+    return;
+  }
+
+  // Drop anything that has since been removed, then seed if this is the first
+  // time: the service you are on, plus the next couple from the workspace, so
+  // the grid opens with something in it rather than a single lonely pane.
+  state.splitIds = new Set([...state.splitIds].filter((id) => appById(id)));
+  if (state.splitIds.size < 2) {
+    const seed = [state.activeId, ...visibleApps().map((a) => a.id)].filter(Boolean);
+    for (const id of seed) {
+      if (state.splitIds.size >= 2) break;
+      state.splitIds.add(id);
+    }
+  }
+
+  renderSplit();
+}
+
+/** Wakes the chosen services, shows only those panes, and sizes the grid. */
+function renderSplit() {
+  const container = $('view-container');
+  const ids = [...state.splitIds].slice(0, 12);
+
+  for (const id of ids) {
+    const app = appById(id);
+    if (!app) continue;
+    if (!state.webviews.has(id)) createWebview(app);
+    state.lastActive.set(id, Date.now());
+  }
+
+  const shown = new Set(ids);
+  for (const [id, pane] of state.panes) {
+    pane.classList.toggle('active', shown.has(id));
+  }
+
+  // A "+" tile so services can be added from inside the grid, not only from
+  // the sidebar.
+  let adder = container.querySelector('.pane-add');
+  if (!adder) {
+    adder = document.createElement('button');
+    adder.className = 'pane pane-add';
+    adder.innerHTML =
+      '<svg viewBox="0 0 24 24" width="26" height="26" fill="none" stroke="currentColor" ' +
+      'stroke-width="2" stroke-linecap="round"><line x1="12" y1="5" x2="12" y2="19"></line>' +
+      '<line x1="5" y1="12" x2="19" y2="12"></line></svg><span>Add a pane</span>';
+    adder.addEventListener('click', (e) => {
+      e.stopPropagation();
+      openSplitMenu(adder);
+    });
+    container.appendChild(adder);
+  }
+  container.appendChild(adder); // keep it last
+  adder.classList.toggle('active', shown.size < 12 && !state.focusedId);
+
+  // Sized from the panes alone. Counting the add tile as a cell left two
+  // services sharing a row with a large empty square beside them.
+  if (state.focusedId && !shown.has(state.focusedId)) state.focusedId = null;
+  container.style.setProperty('--grid-cols', gridColumns(shown.size));
+  applySplitFocus();
+  renderSidebar();
+  saveSplit();
+}
+
+/**
+ * Picker for the "+" tile: everything not already on screen, plus a shortcut to
+ * drop the whole current group in at once. Both routes matter — sometimes you
+ * want two things side by side, sometimes the entire group as a dashboard.
+ */
+function openSplitMenu(anchor) {
+  const menu = $('split-menu');
+  menu.textContent = '';
+
+  const ws = activeWorkspace();
+  const groupIds = visibleApps().map((a) => a.id);
+  const missingFromGroup = groupIds.filter((id) => !state.splitIds.has(id));
+
+  if (missingFromGroup.length > 1) {
+    const all = document.createElement('button');
+    all.className = 'popover-manage';
+    all.textContent = `Add all ${missingFromGroup.length} from "${ws ? ws.name : 'All'}"`;
+    all.addEventListener('click', () => {
+      for (const id of missingFromGroup) {
+        if (state.splitIds.size >= 12) break;
+        state.splitIds.add(id);
+      }
+      menu.hidden = true;
+      renderSplit();
+    });
+    menu.appendChild(all);
+
+    const sep = document.createElement('div');
+    sep.className = 'popover-sep';
+    menu.appendChild(sep);
+  }
+
+  const candidates = apps().filter((a) => !state.splitIds.has(a.id));
+  if (!candidates.length) {
+    const empty = document.createElement('div');
+    empty.className = 'empty-state';
+    empty.style.fontSize = '12px';
+    empty.textContent = 'Every service is already on screen.';
+    menu.appendChild(empty);
+  }
+
+  for (const app of candidates) {
+    const row = document.createElement('button');
+    row.className = 'popover-item';
+    const icon = iconNode(app);
+    icon.classList.add('popover-icon');
+    row.append(icon, document.createTextNode(app.name));
+    row.addEventListener('click', () => {
+      menu.hidden = true;
+      toggleInSplit(app.id);
+    });
+    menu.appendChild(row);
+  }
+
+  const rect = anchor.getBoundingClientRect();
+  menu.style.left = `${Math.min(rect.left, window.innerWidth - 250)}px`;
+  menu.style.top = `${Math.min(rect.top + 8, window.innerHeight - 320)}px`;
+  menu.hidden = false;
+}
+
+function saveSplit() {
+  window.panebox.config.setKey('splitIds', [...state.splitIds]);
+}
+
+/**
+ * Adds or removes one service from the grid.
+ *
+ * This is what makes the grid a choice rather than a consequence of the
+ * workspace: two services side by side is the common case, not nine.
+ */
+function toggleInSplit(appId) {
+  if (state.splitIds.has(appId)) {
+    if (state.splitIds.size <= 1) return setSplit(false); // last pane closes the grid
+    state.splitIds.delete(appId);
+    if (state.focusedId === appId) state.focusedId = null;
+  } else {
+    if (state.splitIds.size >= 12) return;
+    state.splitIds.add(appId);
+  }
+  renderSplit();
+}
+
+function setSplitFocus(appId) {
+  if (!state.split) return;
+  state.focusedId = appId;
+  applySplitFocus();
+}
+
+function applySplitFocus() {
+  const container = $('view-container');
+  const focused = state.focusedId;
+  container.classList.toggle('has-focus', !!focused);
+
+  let thumbs = 0;
+  for (const [id, pane] of state.panes) {
+    const isThumb = !!focused && id !== focused && pane.classList.contains('active');
+    pane.classList.toggle('focused', id === focused);
+    pane.classList.toggle('thumb', isThumb);
+    if (isThumb) thumbs++;
+  }
+
+  // The thumbnail strip needs one column per thumbnail; the focused pane spans
+  // all of them on the row above.
+  container.style.setProperty('--thumb-count', Math.max(thumbs, 1));
+}
+
+function toggleSplit() {
+  setSplit(!state.split);
+}
+
+// -------------------------------------------------------------- icons (page)
+
+/**
+ * Looks for a high-resolution logo inside the page.
+ *
+ * The favicon a page advertises first is typically 16x16 and looks like mush in
+ * the sidebar. Sites almost always ship something better — an apple-touch-icon
+ * at 180px, or manifest icons at 192/512 — so prefer the largest we can find.
+ * Everything is read from the page itself; nothing is asked of a third party.
+ */
+async function findBestIcon(app, wv) {
+  const script = `(async () => {
+    const out = [];
+    // An SVG scales to any size, so it beats every bitmap regardless of what
+    // dimensions the page declares.
+    const push = (href, size) => {
+      if (!href) return;
+      const abs = new URL(href, location.href).href;
+      out.push({ href: abs, size: /\\.svg(\\?|#|$)/i.test(abs) ? 1024 : size });
+    };
+
+    for (const link of document.querySelectorAll('link[rel~="icon"], link[rel~="apple-touch-icon"], link[rel~="apple-touch-icon-precomposed"], link[rel~="shortcut"]')) {
+      const declared = parseInt((link.getAttribute('sizes') || '').split(/[x\\s]/)[0], 10);
+      const isApple = (link.getAttribute('rel') || '').includes('apple');
+      push(link.getAttribute('href'), Number.isFinite(declared) ? declared : (isApple ? 180 : 32));
+    }
+
+    const manifest = document.querySelector('link[rel="manifest"]');
+    if (manifest) {
+      try {
+        const res = await fetch(new URL(manifest.getAttribute('href'), location.href), { credentials: 'omit' });
+        const data = await res.json();
+        for (const icon of data.icons || []) {
+          const declared = parseInt(String(icon.sizes || '').split(/[x\\s]/)[0], 10);
+          push(icon.src, Number.isFinite(declared) ? declared : 64);
+        }
+      } catch (e) { /* no manifest, or blocked — the link tags are enough */ }
+    }
+
+    out.sort((a, b) => b.size - a.size);
+    return out[0] && out[0].size >= 48 ? out[0] : null;
+  })()`;
+
+  const best = await withWebview(app.id, (view) => view.executeJavaScript(script, false), null);
+  if (!best || !best.href || best.href === app.favicon) return;
+
+  app.favicon = best.href;
+  app.faviconHiRes = true;
   saveApps();
   renderSidebar();
 }
@@ -245,6 +601,7 @@ function createWebview(app) {
       console.warn(`[${app.name}] custom JS failed:`, err && err.message);
     });
     if (app.id === state.activeId) syncUrl();
+    if (!app.serviceKey) findBestIcon(app, wv);
   });
 
   const syncUrl = () => {
@@ -253,8 +610,20 @@ function createWebview(app) {
     $('url-input').value = url;
     $('url-lock').classList.toggle('insecure', !/^https:/i.test(url));
   };
-  wv.addEventListener('did-navigate', syncUrl);
-  wv.addEventListener('did-navigate-in-page', syncUrl);
+  wv.addEventListener('did-navigate', () => {
+    syncUrl();
+    refreshNavState();
+  });
+  wv.addEventListener('did-navigate-in-page', () => {
+    syncUrl();
+    refreshNavState();
+  });
+
+  wv.addEventListener('did-start-loading', () => setLoading(app.id, true));
+  wv.addEventListener('did-stop-loading', () => {
+    setLoading(app.id, false);
+    refreshNavState();
+  });
 
   wv.addEventListener('page-title-updated', (e) => {
     // A service that reports exact counts via navigator.setAppBadge is always
@@ -265,7 +634,9 @@ function createWebview(app) {
 
   wv.addEventListener('page-favicon-updated', (e) => {
     const icon = e.favicons && e.favicons[0];
-    if (!icon || icon === app.favicon) return;
+    // Only a starting point: the default favicon is usually 16x16 and looks
+    // muddy at 26px. dom-ready then hunts for something sharper.
+    if (!icon || icon === app.favicon || app.faviconHiRes) return;
     app.favicon = icon;
     saveApps();
     renderSidebar();
@@ -281,7 +652,73 @@ function createWebview(app) {
     console.warn(`[${app.name}] failed to load: ${e.errorDescription} (${e.validatedURL})`);
   });
 
-  $('view-container').appendChild(wv);
+  // The webview lives inside a pane wrapper so grid mode can give it a header.
+  // Built at creation, never moved afterwards: relocating a <webview> in the
+  // DOM tears down its process and reloads the page.
+  const pane = document.createElement('div');
+  pane.className = 'pane';
+  pane.dataset.appId = app.id;
+
+  const head = document.createElement('div');
+  head.className = 'pane-head';
+
+  const label = document.createElement('span');
+  label.className = 'pane-name';
+  label.textContent = app.name;
+
+  const focusBtn = document.createElement('button');
+  focusBtn.className = 'pane-btn';
+  focusBtn.title = 'Expand';
+  focusBtn.textContent = '⤢';
+  focusBtn.addEventListener('click', (e) => {
+    e.stopPropagation();
+    setSplitFocus(state.focusedId === app.id ? null : app.id);
+  });
+
+  const openBtn = document.createElement('button');
+  openBtn.className = 'pane-btn';
+  openBtn.title = 'Open on its own';
+  openBtn.textContent = '↗';
+  openBtn.addEventListener('click', (e) => {
+    e.stopPropagation();
+    setSplit(false);
+    switchTab(app.id);
+  });
+
+  const closeBtn = document.createElement('button');
+  closeBtn.className = 'pane-btn';
+  closeBtn.title = 'Remove from split';
+  closeBtn.textContent = '✕';
+  closeBtn.addEventListener('click', (e) => {
+    e.stopPropagation();
+    toggleInSplit(app.id);
+  });
+
+  head.append(label, focusBtn, openBtn, closeBtn);
+  // Double-click expands. A third click inside the same burst opens the
+  // service on its own — the natural "keep going" gesture.
+  let clicks = 0;
+  let clickTimer = null;
+  head.addEventListener('click', (e) => {
+    if (e.target.closest('.pane-btn')) return;
+    clicks++;
+    clearTimeout(clickTimer);
+    if (clicks === 2) {
+      setSplitFocus(state.focusedId === app.id ? null : app.id);
+    } else if (clicks >= 3) {
+      clicks = 0;
+      setSplit(false);
+      switchTab(app.id);
+      return;
+    }
+    clickTimer = setTimeout(() => {
+      clicks = 0;
+    }, 450);
+  });
+
+  pane.append(head, wv);
+  $('view-container').appendChild(pane);
+  state.panes.set(app.id, pane);
   state.webviews.set(app.id, wv);
   state.lastActive.set(app.id, Date.now());
   return wv;
@@ -290,7 +727,10 @@ function createWebview(app) {
 function destroyWebview(appId) {
   const wv = state.webviews.get(appId);
   if (!wv) return;
-  wv.remove();
+  const pane = state.panes.get(appId);
+  if (pane) pane.remove();
+  else wv.remove();
+  state.panes.delete(appId);
   state.webviews.delete(appId);
   state.ready.delete(appId);
   state.badges.delete(appId);
@@ -308,8 +748,9 @@ function switchTab(appId) {
 
   if (!state.webviews.has(appId)) createWebview(app);
 
-  for (const [id, view] of state.webviews) {
-    view.classList.toggle('active', id === appId);
+  if (state.split) setSplit(false);
+  for (const [id, pane] of state.panes) {
+    pane.classList.toggle('active', id === appId);
   }
   for (const [id, { tab }] of state.tabs) {
     tab.classList.toggle('active', id === appId);
@@ -319,6 +760,8 @@ function switchTab(appId) {
 
   $('url-input').value = withWebview(appId, (view) => view.getURL()) || app.url;
   $('btn-mute').classList.toggle('off', !!app.muted);
+  setLoading(appId, withWebview(appId, (wv) => wv.isLoading(), false));
+  refreshNavState();
   closeFind();
 }
 
@@ -333,6 +776,27 @@ function cycle(delta) {
 // ------------------------------------------------------------- badges
 
 const parseBadgeFromTitle = (title) => window.BADGE.parseBadgeFromTitle(title);
+
+/**
+ * Keeps the toolbar honest.
+ *
+ * Back and forward used to look clickable even with no history, and reload gave
+ * no feedback at all — so a working button was indistinguishable from a broken
+ * one. Now they disable when there is nowhere to go, and reload spins while the
+ * page is actually loading.
+ */
+function refreshNavState() {
+  const canBack = withWebview(state.activeId, (wv) => wv.canGoBack(), false);
+  const canFwd = withWebview(state.activeId, (wv) => wv.canGoForward(), false);
+  $('btn-back').disabled = !canBack;
+  $('btn-forward').disabled = !canFwd;
+}
+
+function setLoading(appId, loading) {
+  if (appId !== state.activeId) return;
+  $('btn-reload').classList.toggle('loading', loading);
+  $('btn-reload').title = loading ? 'Stop loading' : 'Reload (Cmd/Ctrl+R)';
+}
 
 function setBadge(appId, count, source = 'title') {
   const raw = Number(count);
@@ -447,6 +911,7 @@ function hibernationTick() {
 
   for (const [appId] of state.webviews) {
     if (appId === state.activeId) continue;
+    if (state.split && state.panes.get(appId)?.classList.contains('active')) continue;
     const app = appById(appId);
     if (!app || app.hibernate === false) continue;
     const last = state.lastActive.get(appId) || now;
@@ -461,28 +926,35 @@ function hibernationTick() {
 // ---------------------------------------------------------------- add app
 
 function addApp({ name, url, serviceKey, color }) {
-  let finalName = (name || '').trim();
-  let finalUrl = (url || '').trim();
-  if (!finalUrl) return null;
-  if (!/^https?:\/\//i.test(finalUrl)) finalUrl = `https://${finalUrl}`;
-
-  try {
-    const parsed = new URL(finalUrl);
-    if (!finalName) {
-      const host = parsed.hostname.replace(/^www\./, '');
-      finalName = host.split('.')[0].replace(/^./, (c) => c.toUpperCase());
-    }
-  } catch {
-    alert('That does not look like a valid URL.');
+  const parsed = window.URLS.normalizeServiceUrl(url);
+  if (!parsed) {
+    alert(
+      `"${String(url).trim()}" is not a web address Panebox can open.\n\n` +
+        'Try something like notion.so or https://example.com/app.',
+    );
     return null;
   }
+
+  let finalName = (name || '').trim() || window.URLS.nameFromUrl(parsed);
+  const finalUrl = parsed.href;
+
+  // A second copy of the same service is a feature (two accounts), but two
+  // rows reading "Gemini" is not — number them so they can be told apart.
+  const sameName = apps().filter(
+    (a) => a.name === finalName || a.name.startsWith(`${finalName} `),
+  ).length;
+  if (sameName > 0) finalName = `${finalName} ${sameName + 1}`;
+
+  // A hand-typed URL that happens to be a service we know should still get the
+  // official mark rather than a letter avatar.
+  const known = serviceKey ? null : window.CATALOG.byHost(finalUrl);
 
   const app = {
     id: `app-${Date.now()}-${Math.floor(Math.random() * 10000)}`,
     name: finalName,
     url: finalUrl,
-    serviceKey: serviceKey || null,
-    color: color || null,
+    serviceKey: serviceKey || (known && known.key) || null,
+    color: color || (known && known.color) || null,
     favicon: null,
     session: 'isolated',
     notifications: true,
@@ -532,6 +1004,9 @@ function removeApp(appId) {
 let catalogCategory = 'AI';
 
 function renderCatalog() {
+  const ws = activeWorkspace();
+  $('add-target').textContent = ws && ws.appIds ? `Adding to "${ws.name}"` : '';
+
   const query = $('catalog-search').value.trim().toLowerCase();
   const tabs = $('category-tabs');
   const grid = $('catalog-grid');
@@ -606,9 +1081,21 @@ function renderManageList() {
   for (const app of apps()) {
     const row = document.createElement('div');
     row.className = 'manage-app-row';
+    row.dataset.appId = app.id;
 
     const info = document.createElement('div');
     info.className = 'manage-app-info';
+
+    // Reordering belongs where the list is, not only in the sidebar.
+    const grip = document.createElement('span');
+    grip.className = 'row-grip';
+    grip.title = 'Drag to reorder';
+    grip.textContent = '⠿';
+    grip.addEventListener('pointerdown', (e) =>
+      beginReorder(e, row, $('manage-app-list'), commitManageOrder, '.manage-app-row[data-app-id]'),
+    );
+    info.appendChild(grip);
+
     info.appendChild(iconNode(app));
 
     const details = document.createElement('div');
@@ -644,6 +1131,19 @@ function renderManageList() {
 
     row.append(info, actions);
     list.appendChild(row);
+  }
+}
+
+/** The settings list shows every service, so its order is the whole order. */
+function commitManageOrder() {
+  const order = [...$('manage-app-list').querySelectorAll('.manage-app-row[data-app-id]')].map(
+    (n) => n.dataset.appId,
+  );
+  const reordered = order.map((id) => appById(id)).filter(Boolean);
+  if (reordered.length === apps().length) {
+    state.config.apps = reordered;
+    saveApps();
+    renderSidebar();
   }
 }
 
@@ -962,6 +1462,9 @@ function saveServiceModal() {
     if (state.activeId === app.id) switchTab(app.id);
   }
 
+  const pane = state.panes.get(app.id);
+  if (pane) pane.querySelector('.pane-name').textContent = app.name;
+
   renderSidebar();
   renderManageList();
   closeModal('service-modal');
@@ -1248,6 +1751,17 @@ function updateDndButton() {
   $('btn-dnd').classList.toggle('on', !!settings().dnd);
 }
 
+function applySidebarVisibility(hidden) {
+  document.body.classList.toggle('sidebar-hidden', !!hidden);
+}
+
+function toggleSidebar() {
+  const next = !document.body.classList.contains('sidebar-hidden');
+  applySidebarVisibility(next);
+  settings().sidebarHidden = next;
+  window.panebox.config.setKey('settings.sidebarHidden', next);
+}
+
 function applyTheme(isDark) {
   document.documentElement.setAttribute('data-theme', isDark ? 'dark' : 'light');
 }
@@ -1303,6 +1817,8 @@ async function init() {
   migrateLegacy();
 
   applyTheme(await window.panebox.theme.isDark());
+  applySidebarVisibility(settings().sidebarHidden);
+  state.splitIds = new Set((state.config.splitIds || []).filter((id) => appById(id)));
   fillSettingsForm();
   updateDndButton();
   bindSettingsControls();
@@ -1336,7 +1852,7 @@ document.addEventListener('DOMContentLoaded', () => {
     }),
   );
   $('btn-reload').addEventListener('click', () =>
-    withWebview(state.activeId, (wv) => wv.reload()),
+    withWebview(state.activeId, (wv) => (wv.isLoading() ? wv.stop() : wv.reload())),
   );
   $('btn-mute').addEventListener('click', () => {
     const app = appById(state.activeId);
@@ -1353,6 +1869,7 @@ document.addEventListener('DOMContentLoaded', () => {
     updateDndButton();
     $('set-dnd').checked = next;
   });
+  $('btn-split').addEventListener('click', toggleSplit);
   $('btn-find').addEventListener('click', openFind);
   $('btn-todo').addEventListener('click', () => {
     $('todo-panel').hidden = !$('todo-panel').hidden;
@@ -1383,10 +1900,6 @@ document.addEventListener('DOMContentLoaded', () => {
   });
 
   // --- sidebar ---
-  $('btn-add-app').addEventListener('click', () => {
-    renderCatalog();
-    openModal('add-modal');
-  });
   $('btn-settings').addEventListener('click', () => {
     fillSettingsForm();
     renderManageList();
@@ -1399,8 +1912,10 @@ document.addEventListener('DOMContentLoaded', () => {
   });
   // Clicks inside the popover must not dismiss it — you type a name in there.
   $('workspace-menu').addEventListener('click', (e) => e.stopPropagation());
+  $('split-menu').addEventListener('click', (e) => e.stopPropagation());
   document.addEventListener('click', () => {
     $('workspace-menu').hidden = true;
+    $('split-menu').hidden = true;
   });
 
   // --- add modal ---
@@ -1475,6 +1990,13 @@ document.addEventListener('DOMContentLoaded', () => {
   // --- keyboard ---
   window.addEventListener('keydown', (e) => {
     if (e.key === 'Escape') {
+      if (!$('workspace-menu').hidden || !$('split-menu').hidden) {
+        $('workspace-menu').hidden = true;
+        $('split-menu').hidden = true;
+        return;
+      }
+      if (state.focusedId) return setSplitFocus(null);
+      if (state.split) return setSplit(false);
       if (!$('find-bar').hidden) return closeFind();
       document.querySelectorAll('.modal-overlay.active').forEach((m) => {
         if (m.id !== 'screen-modal') closeModal(m.id);
@@ -1483,7 +2005,13 @@ document.addEventListener('DOMContentLoaded', () => {
     }
     if (!(e.metaKey || e.ctrlKey)) return;
 
-    if (e.shiftKey && e.key.toLowerCase() === 'r') {
+    if (e.shiftKey && e.key.toLowerCase() === 's') {
+      e.preventDefault();
+      toggleSplit();
+    } else if (e.key.toLowerCase() === 'b' && !e.shiftKey) {
+      e.preventDefault();
+      toggleSidebar();
+    } else if (e.shiftKey && e.key.toLowerCase() === 'r') {
       e.preventDefault();
       window.panebox.window.relaunch();
     } else if (e.key >= '1' && e.key <= '9') {
@@ -1550,6 +2078,8 @@ document.addEventListener('DOMContentLoaded', () => {
   });
   window.panebox.menu.onOpenFind(openFind);
   window.panebox.menu.onOpenTaskManager(startTaskManager);
+  window.panebox.menu.onToggleSidebar(toggleSidebar);
+  window.panebox.menu.onToggleSplit(toggleSplit);
   window.panebox.menu.onToggleTodo(() => {
     $('todo-panel').hidden = !$('todo-panel').hidden;
   });

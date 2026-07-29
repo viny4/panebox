@@ -38,3 +38,72 @@ test('rejects non-http schemes and malformed input', () => {
   assert.ok(!isAuthUrl('not a url'));
   assert.ok(!isAuthUrl(''));
 });
+
+// --- normalizeServiceUrl -----------------------------------------------------
+
+const { normalizeServiceUrl, nameFromUrl } = require('../lib/urls');
+
+test('accepts a bare hostname and assumes https', () => {
+  assert.strictEqual(normalizeServiceUrl('notion.so').href, 'https://notion.so/');
+});
+
+test('keeps an explicit http url as http', () => {
+  assert.strictEqual(normalizeServiceUrl('http://intranet.local/x').protocol, 'http:');
+});
+
+test('rejects input that is not a web address', () => {
+  // "not a url" used to become https://not%20a%20url and land a dead service.
+  for (const bad of ['not a url', 'foo', '', '   ', null, undefined]) {
+    assert.strictEqual(normalizeServiceUrl(bad), null, `should reject ${JSON.stringify(bad)}`);
+  }
+});
+
+test('rejects non-http schemes', () => {
+  for (const bad of ['javascript:alert(1)', 'file:///etc/passwd', 'data:text/html,<h1>x', 'mailto:a@b.c']) {
+    assert.strictEqual(normalizeServiceUrl(bad), null, `should reject ${bad}`);
+  }
+});
+
+test('allows self-hosted services on localhost and IPs', () => {
+  // "localhost:3000" must read as host:port, not as a scheme.
+  assert.strictEqual(normalizeServiceUrl('localhost:3000').href, 'https://localhost:3000/');
+  assert.strictEqual(normalizeServiceUrl('http://localhost:8080').port, '8080');
+  assert.ok(normalizeServiceUrl('https://192.168.1.5:8080/wiki'));
+});
+
+test('trims surrounding whitespace', () => {
+  assert.strictEqual(normalizeServiceUrl('  spaced.com  ').href, 'https://spaced.com/');
+});
+
+test('derives a readable name', () => {
+  assert.strictEqual(nameFromUrl(normalizeServiceUrl('https://www.notion.so/x')), 'Notion');
+  assert.strictEqual(nameFromUrl(normalizeServiceUrl('sub.domain.co.uk')), 'Sub');
+  assert.strictEqual(nameFromUrl(normalizeServiceUrl('https://192.168.1.5:8080')), '192.168.1.5:8080');
+});
+
+// --- catalog lookup by URL ---------------------------------------------------
+
+const CATALOG = require('../catalog');
+
+test('a hand-typed URL resolves to a known service', () => {
+  assert.strictEqual(CATALOG.byHost('https://notion.so').key, 'notion');
+  assert.strictEqual(CATALOG.byHost('https://linear.app').key, 'linear');
+});
+
+test('matches subdomains of a known service', () => {
+  assert.strictEqual(CATALOG.byHost('https://app.slack.com/client').key, 'slack');
+  assert.strictEqual(CATALOG.byHost('https://music.youtube.com').key, 'youtubemusic');
+});
+
+test('uses the path to separate services that share a host', () => {
+  // Gmail and Google Chat are both on mail.google.com; host-only matching gave
+  // every Gmail URL the Google Chat icon.
+  assert.strictEqual(CATALOG.byHost('https://mail.google.com').key, 'gmail');
+  assert.strictEqual(CATALOG.byHost('https://mail.google.com/x').key, 'gmail');
+  assert.strictEqual(CATALOG.byHost('https://mail.google.com/chat/abc').key, 'googlechat');
+});
+
+test('returns null for an unknown site', () => {
+  assert.strictEqual(CATALOG.byHost('https://news.ycombinator.com'), null);
+  assert.strictEqual(CATALOG.byHost('not a url'), null);
+});

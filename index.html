@@ -63,6 +63,9 @@
         </div>
 
         <div class="action-buttons">
+          <button id="btn-split" class="nav-btn" title="Split view — every service in this group at once (Cmd/Ctrl+Shift+S)" aria-label="Split view">
+            <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="7" height="7" rx="1"></rect><rect x="14" y="3" width="7" height="7" rx="1"></rect><rect x="3" y="14" width="7" height="7" rx="1"></rect><rect x="14" y="14" width="7" height="7" rx="1"></rect></svg>
+          </button>
           <button id="btn-find" class="nav-btn" title="Find in page (Cmd/Ctrl+F)" aria-label="Find in page">
             <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="7"></circle><line x1="21" y1="21" x2="16.65" y2="16.65"></line></svg>
           </button>
@@ -149,7 +152,7 @@
       </div>
 
       <section id="tab-services" class="tab-panel active">
-        <p class="hint">Drag services in the sidebar to reorder them.</p>
+        <p class="hint">Drag the &#10303; handle to reorder, or drag icons in the sidebar.</p>
         <div id="manage-app-list" class="manage-app-list"></div>
       </section>
 
@@ -313,9 +316,11 @@
   </div>
 
   <div id="workspace-menu" class="popover" hidden></div>
+  <div id="split-menu" class="popover" hidden></div>
 
   <script src="catalog.js"></script>
   <script src="icons.js"></script>
+  <script src="lib/urls.js"></script>
   <script src="lib/badge.js"></script>
   <script src="lib/activity.js"></script>
   <script src="renderer.js"></script>

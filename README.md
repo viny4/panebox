@@ -73,7 +73,8 @@ Download the build for your platform from [Releases](https://github.com/viny4/pa
 
 Builds are **not code-signed**, because signing certificates cost money this project doesn't have. That means:
 
-- **macOS** will say the app "cannot be opened because the developer cannot be verified". Right-click the app → Open → Open, or run `xattr -dr com.apple.quarantine /Applications/Panebox.app`.
+- **macOS** will say the app "cannot be opened because the developer cannot be verified". Right-click the app → Open → Open.
+  - If it instead says **"Panebox is damaged and can't be opened"**, that is Gatekeeper rejecting a quarantined app, not a bad download. Run `xattr -dr com.apple.quarantine /Applications/Panebox.app` and open it again.
 - **Windows** will show a SmartScreen warning. Click "More info" → "Run anyway".
 
 If that trade-off isn't acceptable to you, build from source — it takes two commands.
@@ -168,6 +169,10 @@ Panebox exists because [Rambox](https://rambox.app) went closed-source and [Fran
 - **[Ferdium](https://github.com/ferdium/ferdium-app)** (Apache-2.0) — the most complete option
 - **[ElectronIM](https://github.com/manusa/electronim)** (Apache-2.0) — minimal and privacy-focused
 - **[Hamsket](https://github.com/TheGoddessInari/hamsket)** (GPL-3.0) — a fork of the last open-source Rambox
+
+## Credits
+
+Brand marks come from [simple-icons](https://github.com/simple-icons/simple-icons) (CC0-1.0), inlined into `icons.js` at build time so the app ships no icon dependency and never fetches an icon over the network. Services without an official mark use a generated letter avatar until the site reports its own favicon.
 
 ## License
 

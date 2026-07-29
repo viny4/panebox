@@ -89,5 +89,54 @@
     return SERVICES.find((s) => s.key === key) || null;
   }
 
-  return { SERVICES, CATEGORIES, DEFAULT_KEYS, byKey };
+  const bareHost = (value) => {
+    try {
+      return new URL(value).hostname.replace(/^www\./i, '').toLowerCase();
+    } catch {
+      return '';
+    }
+  };
+
+  const barePath = (value) => {
+    try {
+      return new URL(value).pathname.replace(/\/+$/, '') || '/';
+    } catch {
+      return '/';
+    }
+  };
+
+  /**
+   * Finds a catalog entry for a URL, so one typed by hand still gets the
+   * official brand mark instead of a letter avatar.
+   *
+   * The path matters, not just the host: Gmail and Google Chat both live on
+   * mail.google.com, separated only by /chat. Host-only matching handed every
+   * Gmail URL the Google Chat icon.
+   */
+  function byHost(url) {
+    const host = bareHost(url);
+    if (!host) return null;
+    const path = barePath(url);
+
+    const sameHost = SERVICES.filter((s) => bareHost(s.url) === host);
+    if (sameHost.length) {
+      // Most specific path that the URL actually sits under wins; '/' matches
+      // anything and acts as the fallback for that host.
+      const scored = sameHost
+        .map((s) => ({ service: s, prefix: barePath(s.url) }))
+        .filter((c) => c.prefix === '/' || path === c.prefix || path.startsWith(`${c.prefix}/`))
+        .sort((a, b) => b.prefix.length - a.prefix.length);
+      if (scored.length) return scored[0].service;
+    }
+
+    // Fall back to a subdomain relationship: app.slack.com -> Slack.
+    return (
+      SERVICES.find((s) => {
+        const known = bareHost(s.url);
+        return known && (host.endsWith(`.${known}`) || known.endsWith(`.${host}`));
+      }) || null
+    );
+  }
+
+  return { SERVICES, CATEGORIES, DEFAULT_KEYS, byKey, byHost };
 });
