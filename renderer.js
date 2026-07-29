@@ -1147,6 +1147,72 @@ function commitManageOrder() {
   }
 }
 
+/** Settings → Shortcuts. Both platforms, so the list doubles as documentation. */
+function renderShortcuts() {
+  const root = $('shortcut-list');
+  root.textContent = '';
+  const isMac = window.panebox.platform === 'darwin';
+
+  const legend = document.createElement('div');
+  legend.className = 'shortcut-legend';
+  const spacer = document.createElement('span');
+  const macCol = document.createElement('span');
+  macCol.textContent = 'macOS';
+  macCol.className = isMac ? 'current' : '';
+  const winCol = document.createElement('span');
+  winCol.textContent = 'Windows / Linux';
+  winCol.className = isMac ? '' : 'current';
+  legend.append(spacer, macCol, winCol);
+  root.appendChild(legend);
+
+  const keyGroup = (keys, current) => {
+    const cell = document.createElement('span');
+    cell.className = 'shortcut-keys' + (current ? ' current' : '');
+    if (!keys) {
+      const dash = document.createElement('span');
+      dash.className = 'shortcut-none';
+      dash.textContent = '—';
+      cell.appendChild(dash);
+      return cell;
+    }
+    for (const k of keys) {
+      const kbd = document.createElement('kbd');
+      kbd.textContent = k;
+      cell.appendChild(kbd);
+    }
+    return cell;
+  };
+
+  for (const section of window.SHORTCUTS.rows()) {
+    const heading = document.createElement('h4');
+    heading.className = 'shortcut-heading';
+    heading.textContent = section.title;
+    root.appendChild(heading);
+
+    for (const item of section.items) {
+      const row = document.createElement('div');
+      row.className = 'shortcut-row' + (section.mouse ? ' gesture-row' : '');
+
+      const label = document.createElement('span');
+      label.className = 'shortcut-label';
+      label.textContent = item.label;
+      row.appendChild(label);
+
+      if (item.gesture) {
+        const g = document.createElement('span');
+        g.className = 'shortcut-gesture';
+        g.textContent = item.gesture;
+        row.appendChild(g);
+      } else {
+        row.appendChild(keyGroup(window.SHORTCUTS.render(item.mac, true), isMac));
+        row.appendChild(keyGroup(window.SHORTCUTS.render(item.win, false), !isMac));
+      }
+
+      root.appendChild(row);
+    }
+  }
+}
+
 function renderWorkspaceList() {
   const list = $('workspace-list');
   list.textContent = '';
@@ -1904,6 +1970,7 @@ document.addEventListener('DOMContentLoaded', () => {
     fillSettingsForm();
     renderManageList();
     renderWorkspaceList();
+    renderShortcuts();
     openModal('settings-modal');
   });
   $('btn-workspace').addEventListener('click', (e) => {
@@ -2070,6 +2137,7 @@ document.addEventListener('DOMContentLoaded', () => {
     fillSettingsForm();
     renderManageList();
     renderWorkspaceList();
+    renderShortcuts();
     openModal('settings-modal');
   });
   window.panebox.menu.onOpenAdd(() => {

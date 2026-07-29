@@ -149,6 +149,7 @@
         <button class="tab-btn" data-tab="tab-workspaces">Workspaces</button>
         <button class="tab-btn" data-tab="tab-general">General</button>
         <button class="tab-btn" data-tab="tab-data">Data</button>
+        <button class="tab-btn" data-tab="tab-shortcuts">Shortcuts</button>
       </div>
 
       <section id="tab-services" class="tab-panel active">
@@ -230,6 +231,10 @@
           <button id="btn-reset" class="btn-delete-row">Reset all services to defaults</button>
         </div>
         <p class="hint" id="config-path"></p>
+      </section>
+
+      <section id="tab-shortcuts" class="tab-panel">
+        <div id="shortcut-list"></div>
       </section>
     </div>
   </div>
@@ -321,6 +326,7 @@
   <script src="catalog.js"></script>
   <script src="icons.js"></script>
   <script src="lib/urls.js"></script>
+  <script src="lib/shortcuts.js"></script>
   <script src="lib/badge.js"></script>
   <script src="lib/activity.js"></script>
   <script src="renderer.js"></script>
