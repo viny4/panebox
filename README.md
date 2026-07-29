@@ -73,8 +73,15 @@ Download the build for your platform from [Releases](https://github.com/viny4/pa
 
 Builds are **not code-signed**, because signing certificates cost money this project doesn't have. That means:
 
-- **macOS** will say the app "cannot be opened because the developer cannot be verified". Right-click the app → Open → Open.
-  - If it instead says **"Panebox is damaged and can't be opened"**, that is Gatekeeper rejecting a quarantined app, not a bad download. Run `xattr -dr com.apple.quarantine /Applications/Panebox.app` and open it again.
+- **macOS** will say *"Apple could not verify Panebox.app is free of malware"*. The app is fine — macOS simply cannot check a developer it does not know.
+
+  Click **Done** (never "Move to Bin"), then open **System Settings → Privacy & Security**, scroll to the bottom, and click **Open Anyway** next to "Panebox.app was blocked".
+
+  On macOS 15 and later, right-clicking the app and choosing Open no longer works; Apple removed that shortcut. If you would rather use the terminal:
+
+  ```bash
+  xattr -dr com.apple.quarantine /Applications/Panebox.app
+  ```
 - **Windows** will show a SmartScreen warning. Click "More info" → "Run anyway".
 
 If that trade-off isn't acceptable to you, build from source — it takes two commands.

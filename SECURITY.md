@@ -29,7 +29,9 @@ Panebox loads arbitrary third-party websites, so the boundaries matter. What's i
 
 **Custom JavaScript per service.** Panebox lets you paste JavaScript that runs inside a service, with full access to that service and your logged-in session. This is intentional, opt-in, off by default, and warned about in the UI. Only paste code you understand.
 
-**Builds are unsigned.** Releases are not code-signed on macOS or Windows, because certificates cost money this project doesn't have. Verify what you download, or build from source.
+**Builds are unsigned and un-notarized.** Releases carry only an ad-hoc signature — enough for macOS to run them at all, but not a Developer ID. macOS will say it "could not verify Panebox is free of malware", and Windows will show SmartScreen. Both are accurate: nobody has vouched for these binaries. Verify what you download, or build from source.
+
+Practically, this also means auto-update cannot install itself on macOS: Squirrel refuses to update an app without a valid signature, so macOS gets a notification and a download link instead.
 
 **No sandboxing of service content beyond Chromium's own.** Panebox is a container around real websites. If a site is malicious, Chromium's sandbox and the session isolation above are what stand between it and you — the same as any browser.
 
