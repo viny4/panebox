@@ -2,10 +2,10 @@
 
 A small, private desktop deck for the web apps you keep open all day — ChatGPT, Claude, Gemini, Perplexity, WhatsApp, Gmail and ~50 more — each in its own isolated session, in one window.
 
-> **Add a screenshot here before publishing.** Take one of the real app
+
 <img width="1470" height="956" alt="image" src="https://github.com/user-attachments/assets/5f26ff31-b5ab-4632-bc7f-f693e3d04c88" />
 
-> screenshot in the first screen of the README gets skipped.
+
 
 ## Why this exists
 
