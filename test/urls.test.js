@@ -80,3 +80,30 @@ test('derives a readable name', () => {
   assert.strictEqual(nameFromUrl(normalizeServiceUrl('sub.domain.co.uk')), 'Sub');
   assert.strictEqual(nameFromUrl(normalizeServiceUrl('https://192.168.1.5:8080')), '192.168.1.5:8080');
 });
+
+// --- catalog lookup by URL ---------------------------------------------------
+
+const CATALOG = require('../catalog');
+
+test('a hand-typed URL resolves to a known service', () => {
+  assert.strictEqual(CATALOG.byHost('https://notion.so').key, 'notion');
+  assert.strictEqual(CATALOG.byHost('https://linear.app').key, 'linear');
+});
+
+test('matches subdomains of a known service', () => {
+  assert.strictEqual(CATALOG.byHost('https://app.slack.com/client').key, 'slack');
+  assert.strictEqual(CATALOG.byHost('https://music.youtube.com').key, 'youtubemusic');
+});
+
+test('uses the path to separate services that share a host', () => {
+  // Gmail and Google Chat are both on mail.google.com; host-only matching gave
+  // every Gmail URL the Google Chat icon.
+  assert.strictEqual(CATALOG.byHost('https://mail.google.com').key, 'gmail');
+  assert.strictEqual(CATALOG.byHost('https://mail.google.com/x').key, 'gmail');
+  assert.strictEqual(CATALOG.byHost('https://mail.google.com/chat/abc').key, 'googlechat');
+});
+
+test('returns null for an unknown site', () => {
+  assert.strictEqual(CATALOG.byHost('https://news.ycombinator.com'), null);
+  assert.strictEqual(CATALOG.byHost('not a url'), null);
+});

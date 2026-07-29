@@ -295,6 +295,58 @@ function commitSidebarOrder() {
   saveApps();
 }
 
+// -------------------------------------------------------------- icons (page)
+
+/**
+ * Looks for a high-resolution logo inside the page.
+ *
+ * The favicon a page advertises first is typically 16x16 and looks like mush in
+ * the sidebar. Sites almost always ship something better — an apple-touch-icon
+ * at 180px, or manifest icons at 192/512 — so prefer the largest we can find.
+ * Everything is read from the page itself; nothing is asked of a third party.
+ */
+async function findBestIcon(app, wv) {
+  const script = `(async () => {
+    const out = [];
+    // An SVG scales to any size, so it beats every bitmap regardless of what
+    // dimensions the page declares.
+    const push = (href, size) => {
+      if (!href) return;
+      const abs = new URL(href, location.href).href;
+      out.push({ href: abs, size: /\\.svg(\\?|#|$)/i.test(abs) ? 1024 : size });
+    };
+
+    for (const link of document.querySelectorAll('link[rel~="icon"], link[rel~="apple-touch-icon"], link[rel~="apple-touch-icon-precomposed"], link[rel~="shortcut"]')) {
+      const declared = parseInt((link.getAttribute('sizes') || '').split(/[x\\s]/)[0], 10);
+      const isApple = (link.getAttribute('rel') || '').includes('apple');
+      push(link.getAttribute('href'), Number.isFinite(declared) ? declared : (isApple ? 180 : 32));
+    }
+
+    const manifest = document.querySelector('link[rel="manifest"]');
+    if (manifest) {
+      try {
+        const res = await fetch(new URL(manifest.getAttribute('href'), location.href), { credentials: 'omit' });
+        const data = await res.json();
+        for (const icon of data.icons || []) {
+          const declared = parseInt(String(icon.sizes || '').split(/[x\\s]/)[0], 10);
+          push(icon.src, Number.isFinite(declared) ? declared : 64);
+        }
+      } catch (e) { /* no manifest, or blocked — the link tags are enough */ }
+    }
+
+    out.sort((a, b) => b.size - a.size);
+    return out[0] && out[0].size >= 48 ? out[0] : null;
+  })()`;
+
+  const best = await withWebview(app.id, (view) => view.executeJavaScript(script, false), null);
+  if (!best || !best.href || best.href === app.favicon) return;
+
+  app.favicon = best.href;
+  app.faviconHiRes = true;
+  saveApps();
+  renderSidebar();
+}
+
 // -------------------------------------------------------------- webviews
 
 function createWebview(app) {
@@ -312,6 +364,7 @@ function createWebview(app) {
       console.warn(`[${app.name}] custom JS failed:`, err && err.message);
     });
     if (app.id === state.activeId) syncUrl();
+    if (!app.serviceKey) findBestIcon(app, wv);
   });
 
   const syncUrl = () => {
@@ -344,7 +397,9 @@ function createWebview(app) {
 
   wv.addEventListener('page-favicon-updated', (e) => {
     const icon = e.favicons && e.favicons[0];
-    if (!icon || icon === app.favicon) return;
+    // Only a starting point: the default favicon is usually 16x16 and looks
+    // muddy at 26px. dom-ready then hunts for something sharper.
+    if (!icon || icon === app.favicon || app.faviconHiRes) return;
     app.favicon = icon;
     saveApps();
     renderSidebar();
@@ -582,12 +637,16 @@ function addApp({ name, url, serviceKey, color }) {
   ).length;
   if (sameName > 0) finalName = `${finalName} ${sameName + 1}`;
 
+  // A hand-typed URL that happens to be a service we know should still get the
+  // official mark rather than a letter avatar.
+  const known = serviceKey ? null : window.CATALOG.byHost(finalUrl);
+
   const app = {
     id: `app-${Date.now()}-${Math.floor(Math.random() * 10000)}`,
     name: finalName,
     url: finalUrl,
-    serviceKey: serviceKey || null,
-    color: color || null,
+    serviceKey: serviceKey || (known && known.key) || null,
+    color: color || (known && known.color) || null,
     favicon: null,
     session: 'isolated',
     notifications: true,
