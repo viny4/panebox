@@ -19,7 +19,8 @@ const state = {
   activeId: null,
   webviews: new Map(), // appId -> <webview>
   panes: new Map(), // appId -> wrapper element holding the webview
-  split: false, // grid mode: every service in the workspace on screen at once
+  split: false, // grid mode
+  splitIds: new Set(), // which services are in the grid — chosen, not implied
   focusedId: null, // in grid mode, the pane spotlighted at full size
   ready: new Set(), // appIds whose webview has emitted dom-ready
   tabs: new Map(), // appId -> { tab, badgeEl }
@@ -178,11 +179,20 @@ function renderSidebar() {
       }
     });
 
+    if (state.split) {
+      tab.classList.toggle('in-split', state.splitIds.has(app.id));
+    }
+
     const tooltip = document.createElement('div');
     tooltip.className = 'app-tooltip';
-    tooltip.textContent = app.name;
+    tooltip.textContent = state.split
+      ? `${state.splitIds.has(app.id) ? 'Remove from' : 'Add to'} split — ${app.name}`
+      : app.name;
 
-    tab.addEventListener('click', () => switchTab(app.id));
+    tab.addEventListener('click', () => {
+      if (state.split) toggleInSplit(app.id);
+      else switchTab(app.id);
+    });
     tab.addEventListener('contextmenu', (e) => {
       e.preventDefault();
       openServiceModal(app.id);
@@ -322,6 +332,8 @@ function setSplit(on) {
   $('btn-split').classList.toggle('on', state.split);
 
   if (!state.split) {
+    const adder = container.querySelector('.pane-add');
+    if (adder) adder.classList.remove('active');
     for (const [id, pane] of state.panes) {
       pane.classList.remove('focused', 'thumb');
       pane.classList.toggle('active', id === state.activeId);
@@ -330,20 +342,144 @@ function setSplit(on) {
     return;
   }
 
-  // Everything in the current workspace goes on screen, so a group doubles as
-  // a dashboard. Waking them all costs memory, hence the cap.
-  const wanted = visibleApps().slice(0, 12);
-  for (const app of wanted) {
-    if (!state.webviews.has(app.id)) createWebview(app);
-    state.lastActive.set(app.id, Date.now());
+  // Drop anything that has since been removed, then seed if this is the first
+  // time: the service you are on, plus the next couple from the workspace, so
+  // the grid opens with something in it rather than a single lonely pane.
+  state.splitIds = new Set([...state.splitIds].filter((id) => appById(id)));
+  if (state.splitIds.size < 2) {
+    const seed = [state.activeId, ...visibleApps().map((a) => a.id)].filter(Boolean);
+    for (const id of seed) {
+      if (state.splitIds.size >= 2) break;
+      state.splitIds.add(id);
+    }
   }
 
-  const shown = new Set(wanted.map((a) => a.id));
+  renderSplit();
+}
+
+/** Wakes the chosen services, shows only those panes, and sizes the grid. */
+function renderSplit() {
+  const container = $('view-container');
+  const ids = [...state.splitIds].slice(0, 12);
+
+  for (const id of ids) {
+    const app = appById(id);
+    if (!app) continue;
+    if (!state.webviews.has(id)) createWebview(app);
+    state.lastActive.set(id, Date.now());
+  }
+
+  const shown = new Set(ids);
   for (const [id, pane] of state.panes) {
     pane.classList.toggle('active', shown.has(id));
   }
-  container.style.setProperty('--grid-cols', gridColumns(shown.size));
+
+  // A "+" tile so services can be added from inside the grid, not only from
+  // the sidebar.
+  let adder = container.querySelector('.pane-add');
+  if (!adder) {
+    adder = document.createElement('button');
+    adder.className = 'pane pane-add';
+    adder.innerHTML =
+      '<svg viewBox="0 0 24 24" width="26" height="26" fill="none" stroke="currentColor" ' +
+      'stroke-width="2" stroke-linecap="round"><line x1="12" y1="5" x2="12" y2="19"></line>' +
+      '<line x1="5" y1="12" x2="19" y2="12"></line></svg><span>Add a pane</span>';
+    adder.addEventListener('click', (e) => {
+      e.stopPropagation();
+      openSplitMenu(adder);
+    });
+    container.appendChild(adder);
+  }
+  container.appendChild(adder); // keep it last
+  adder.classList.toggle('active', shown.size < 12 && !state.focusedId);
+
+  if (state.focusedId && !shown.has(state.focusedId)) state.focusedId = null;
+  container.style.setProperty('--grid-cols', gridColumns(shown.size + (shown.size < 12 ? 1 : 0)));
   applySplitFocus();
+  renderSidebar();
+  saveSplit();
+}
+
+/**
+ * Picker for the "+" tile: everything not already on screen, plus a shortcut to
+ * drop the whole current group in at once. Both routes matter — sometimes you
+ * want two things side by side, sometimes the entire group as a dashboard.
+ */
+function openSplitMenu(anchor) {
+  const menu = $('split-menu');
+  menu.textContent = '';
+
+  const ws = activeWorkspace();
+  const groupIds = visibleApps().map((a) => a.id);
+  const missingFromGroup = groupIds.filter((id) => !state.splitIds.has(id));
+
+  if (missingFromGroup.length > 1) {
+    const all = document.createElement('button');
+    all.className = 'popover-manage';
+    all.textContent = `Add all ${missingFromGroup.length} from "${ws ? ws.name : 'All'}"`;
+    all.addEventListener('click', () => {
+      for (const id of missingFromGroup) {
+        if (state.splitIds.size >= 12) break;
+        state.splitIds.add(id);
+      }
+      menu.hidden = true;
+      renderSplit();
+    });
+    menu.appendChild(all);
+
+    const sep = document.createElement('div');
+    sep.className = 'popover-sep';
+    menu.appendChild(sep);
+  }
+
+  const candidates = apps().filter((a) => !state.splitIds.has(a.id));
+  if (!candidates.length) {
+    const empty = document.createElement('div');
+    empty.className = 'empty-state';
+    empty.style.fontSize = '12px';
+    empty.textContent = 'Every service is already on screen.';
+    menu.appendChild(empty);
+  }
+
+  for (const app of candidates) {
+    const row = document.createElement('button');
+    row.className = 'popover-item';
+    const icon = iconNode(app);
+    icon.classList.add('popover-icon');
+    row.append(icon, document.createTextNode(app.name));
+    row.addEventListener('click', () => {
+      menu.hidden = true;
+      toggleInSplit(app.id);
+    });
+    menu.appendChild(row);
+  }
+
+  const rect = anchor.getBoundingClientRect();
+  menu.style.left = `${Math.min(rect.left, window.innerWidth - 250)}px`;
+  menu.style.top = `${Math.min(rect.top + 8, window.innerHeight - 320)}px`;
+  menu.hidden = false;
+}
+
+function saveSplit() {
+  window.panebox.config.setKey('splitIds', [...state.splitIds]);
+}
+
+/**
+ * Adds or removes one service from the grid.
+ *
+ * This is what makes the grid a choice rather than a consequence of the
+ * workspace: two services side by side is the common case, not nine.
+ */
+function toggleInSplit(appId) {
+  if (state.splitIds.has(appId)) {
+    if (state.splitIds.size <= 1) return setSplit(false); // last pane closes the grid
+    state.splitIds.delete(appId);
+    if (state.focusedId === appId) state.focusedId = null;
+  } else {
+    if (state.splitIds.size >= 12) return;
+    state.splitIds.add(appId);
+  }
+  renderSplit();
 }
 
 function setSplitFocus(appId) {
@@ -527,7 +663,16 @@ function createWebview(app) {
     switchTab(app.id);
   });
 
-  head.append(label, focusBtn, openBtn);
+  const closeBtn = document.createElement('button');
+  closeBtn.className = 'pane-btn';
+  closeBtn.title = 'Remove from split';
+  closeBtn.textContent = '✕';
+  closeBtn.addEventListener('click', (e) => {
+    e.stopPropagation();
+    toggleInSplit(app.id);
+  });
+
+  head.append(label, focusBtn, openBtn, closeBtn);
   head.addEventListener('dblclick', () =>
     setSplitFocus(state.focusedId === app.id ? null : app.id),
   );
@@ -1634,6 +1779,7 @@ async function init() {
 
   applyTheme(await window.panebox.theme.isDark());
   applySidebarVisibility(settings().sidebarHidden);
+  state.splitIds = new Set((state.config.splitIds || []).filter((id) => appById(id)));
   fillSettingsForm();
   updateDndButton();
   bindSettingsControls();
@@ -1727,8 +1873,10 @@ document.addEventListener('DOMContentLoaded', () => {
   });
   // Clicks inside the popover must not dismiss it — you type a name in there.
   $('workspace-menu').addEventListener('click', (e) => e.stopPropagation());
+  $('split-menu').addEventListener('click', (e) => e.stopPropagation());
   document.addEventListener('click', () => {
     $('workspace-menu').hidden = true;
+    $('split-menu').hidden = true;
   });
 
   // --- add modal ---
@@ -1803,8 +1951,9 @@ document.addEventListener('DOMContentLoaded', () => {
   // --- keyboard ---
   window.addEventListener('keydown', (e) => {
     if (e.key === 'Escape') {
-      if (!$('workspace-menu').hidden) {
+      if (!$('workspace-menu').hidden || !$('split-menu').hidden) {
         $('workspace-menu').hidden = true;
+        $('split-menu').hidden = true;
         return;
       }
       if (state.focusedId) return setSplitFocus(null);
