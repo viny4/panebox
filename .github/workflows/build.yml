@@ -56,7 +56,11 @@ jobs:
           node-version: 22
           cache: npm
       - run: npm ci
-      - run: npm run ${{ matrix.script }}
+      # --publish never is required, not optional. package.json declares a
+      # `publish` target, and electron-builder tries to upload to it whenever it
+      # detects CI — even here, where there is deliberately no token. Without
+      # this flag the job dies with "GitHub Personal Access Token is not set".
+      - run: npm run ${{ matrix.script }} -- --publish never
         env:
           CSC_IDENTITY_AUTO_DISCOVERY: false
 
