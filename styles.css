@@ -56,9 +56,15 @@ button { font-family: inherit; }
 
 #app-container { display: flex; width: 100vw; height: 100vh; position: relative; }
 
-/* macOS traffic-light drag strip. */
+/* macOS traffic-light drag strip.
+   Width is deliberately limited to the sidebar. It used to span the whole
+   window at z-index 101, which put an invisible drag region on top of every
+   toolbar button — clicks landed on the strip and the buttons never fired,
+   while Cmd+R still worked because menu accelerators bypass the DOM.
+   The toolbar is draggable in its own right (#topbar sets -webkit-app-region:
+   drag, with no-drag on the control groups), so nothing is lost. */
 .drag-handle {
-  position: absolute; top: 0; left: 0; right: 0; height: 44px;
+  position: absolute; top: 0; left: 0; width: 76px; height: 44px;
   -webkit-app-region: drag; z-index: 101; pointer-events: none;
 }
 body.platform-darwin .drag-handle { pointer-events: auto; }
