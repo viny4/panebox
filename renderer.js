@@ -151,7 +151,6 @@ function renderSidebar() {
     wrapper.className = 'app-tab-wrapper';
     wrapper.draggable = true;
     wrapper.dataset.appId = app.id;
-    wrapper.title = 'Drag to reorder';
 
     const tab = document.createElement('div');
     tab.className = 'app-tab' + (app.id === state.activeId ? ' active' : '');
@@ -213,31 +212,6 @@ function renderSidebar() {
     list.appendChild(wrapper);
     state.tabs.set(app.id, { tab, badgeEl: badge });
   }
-
-  // The add button lives with the services, not stranded in the footer — it is
-  // where you look when you want another one.
-  const addWrap = document.createElement('div');
-  addWrap.className = 'app-tab-wrapper';
-
-  const addTile = document.createElement('button');
-  addTile.className = 'app-add-tile';
-  addTile.setAttribute('aria-label', 'Add a service');
-  addTile.innerHTML =
-    '<svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" ' +
-    'stroke-width="2" stroke-linecap="round"><line x1="12" y1="5" x2="12" y2="19"></line>' +
-    '<line x1="5" y1="12" x2="19" y2="12"></line></svg>';
-  addTile.addEventListener('click', () => {
-    renderCatalog();
-    openModal('add-modal');
-  });
-
-  const addTip = document.createElement('div');
-  addTip.className = 'app-tooltip';
-  const ws = activeWorkspace();
-  addTip.textContent = ws && ws.appIds ? `Add to ${ws.name}` : 'Add a service';
-
-  addWrap.append(addTile, addTip);
-  list.appendChild(addWrap);
 
   refreshBadges();
 }
@@ -558,9 +532,6 @@ function removeApp(appId) {
 let catalogCategory = 'AI';
 
 function renderCatalog() {
-  const ws = activeWorkspace();
-  $('add-target').textContent = ws && ws.appIds ? `Adding to "${ws.name}"` : '';
-
   const query = $('catalog-search').value.trim().toLowerCase();
   const tabs = $('category-tabs');
   const grid = $('catalog-grid');
@@ -1412,6 +1383,10 @@ document.addEventListener('DOMContentLoaded', () => {
   });
 
   // --- sidebar ---
+  $('btn-add-app').addEventListener('click', () => {
+    renderCatalog();
+    openModal('add-modal');
+  });
   $('btn-settings').addEventListener('click', () => {
     fillSettingsForm();
     renderManageList();

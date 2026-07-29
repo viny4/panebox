@@ -151,6 +151,8 @@ If you build Panebox yourself with a Developer ID, set `MAC_BUILD_IS_SIGNED = tr
 
 Check manually any time with **Help → Check for Updates**, or turn the daily check off in Settings → General.
 
+Releases are cut automatically when the version in `package.json` changes on `main`, so a new version reaches users without anyone running `git tag`.
+
 ## Contributing
 
 Issues and pull requests welcome — see [CONTRIBUTING.md](CONTRIBUTING.md).

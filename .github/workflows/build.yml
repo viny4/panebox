@@ -4,8 +4,8 @@ name: build
 #   dev   — where contributor PRs land and get verified together
 #   main  — release line, only ever updated by a PR from dev
 #
-# Tests run on both. Packaging is expensive (three full Electron builds), so it
-# only runs where the artifacts are actually wanted.
+# Releasing is automatic: bump the version in package.json, merge to main, and
+# CI builds and publishes. No manual tagging.
 on:
   push:
     branches: [main, dev]
@@ -31,13 +31,61 @@ jobs:
       # Icons are generated from source; fail if the committed PNGs drifted.
       - run: npm run icons:check
 
-  # Smoke test that the app still packages. Runs on main and on demand, but not
-  # on every pull request — three OS builds per PR would make review slow.
-  package:
+  # Did this push to main bump the version? That is the release signal.
+  #
+  # Deliberately not "release on every push to main" — that would ship a build
+  # for every typo and nag users constantly. You decide when a batch of work is
+  # worth shipping by bumping the version; everything after that is automatic.
+  check-version:
     needs: test
+    if: github.ref == 'refs/heads/main' && github.event_name == 'push'
+    runs-on: ubuntu-latest
+    outputs:
+      should_release: ${{ steps.check.outputs.should_release }}
+      version: ${{ steps.check.outputs.version }}
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          fetch-depth: 2 # need the previous commit to diff package.json
+          fetch-tags: true
+
+      - id: check
+        run: |
+          version=$(node -p "require('./package.json').version")
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+
+          previous=$(git show HEAD~1:package.json 2>/dev/null \
+            | node -e "let s='';process.stdin.on('data',d=>s+=d).on('end',()=>{try{console.log(JSON.parse(s).version)}catch{console.log('none')}})" \
+            || echo "none")
+
+          echo "current version:  $version"
+          echo "previous version: $previous"
+
+          if [ "$version" = "$previous" ]; then
+            echo "No version change — not releasing."
+            echo "should_release=false" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+
+          # Guard against re-releasing a version that already shipped, which
+          # would fail on upload and leave a half-built release behind.
+          if git ls-remote --exit-code --tags origin "refs/tags/v$version" >/dev/null 2>&1; then
+            echo "Tag v$version already exists — not releasing."
+            echo "should_release=false" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+
+          echo "Version changed $previous -> $version. Releasing."
+          echo "should_release=true" >> "$GITHUB_OUTPUT"
+
+  # Smoke test that the app still packages, for main pushes that are not
+  # releases. Skipped when a release is happening, since that builds anyway.
+  package:
+    needs: [test, check-version]
     if: >-
-      github.ref == 'refs/heads/main' ||
-      github.event_name == 'workflow_dispatch'
+      always() && needs.test.result == 'success' &&
+      (github.event_name == 'workflow_dispatch' ||
+       needs.check-version.outputs.should_release == 'false')
     strategy:
       fail-fast: false
       matrix:
@@ -64,15 +112,19 @@ jobs:
         env:
           CSC_IDENTITY_AUTO_DISCOVERY: false
 
-  # Tag builds publish straight to a draft GitHub Release.
+  # Builds and uploads to a draft release. Runs either because the version was
+  # bumped on main, or because a v* tag was pushed by hand.
   #
-  # This uses electron-builder's --publish rather than uploading artifacts by
-  # hand, because the in-app updater needs the metadata files electron-builder
-  # generates alongside the installers (latest.yml, latest-mac.yml,
-  # latest-linux.yml). Without those, auto-update silently never finds anything.
+  # electron-builder creates the release from the version in package.json, and
+  # GitHub creates the tag when the draft is published — so nothing needs to
+  # push a tag. That matters: a tag pushed with GITHUB_TOKEN would not trigger
+  # a new workflow run, so a tag-then-release chain would silently do nothing.
   release:
-    needs: test
-    if: startsWith(github.ref, 'refs/tags/v')
+    needs: [test, check-version]
+    if: >-
+      always() && needs.test.result == 'success' &&
+      (startsWith(github.ref, 'refs/tags/v') ||
+       needs.check-version.outputs.should_release == 'true')
     strategy:
       fail-fast: false
       matrix:
@@ -101,20 +153,38 @@ jobs:
           CSC_IDENTITY_AUTO_DISCOVERY: false
 
   # Only flip the draft to published once all three platforms uploaded, so users
-  # never see a release that's missing their installer — and, more importantly,
-  # so the updater never sees a half-populated release.
+  # never see a release missing their installer — and, more importantly, so the
+  # updater never reads a half-populated release and caches "no update" for a day.
   publish:
-    needs: release
-    if: startsWith(github.ref, 'refs/tags/v')
+    needs: [check-version, release]
+    if: always() && needs.release.result == 'success'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v5
+
       - name: Publish the draft release
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          TAG: ${{ github.ref_name }}
         run: |
+          if [ "${{ startsWith(github.ref, 'refs/tags/v') }}" = "true" ]; then
+            TAG="${{ github.ref_name }}"
+          else
+            TAG="v${{ needs.check-version.outputs.version }}"
+          fi
+
+          echo "Publishing $TAG"
           gh release edit "$TAG" --draft=false --repo "$GITHUB_REPOSITORY"
-          echo "Published $TAG"
-          gh release view "$TAG" --repo "$GITHUB_REPOSITORY" --json assets \
-            --jq '.assets[].name' | sort
+
+          echo "Assets:"
+          gh release view "$TAG" --repo "$GITHUB_REPOSITORY" --json assets --jq '.assets[].name' | sort
+
+          # The updater reads these. Without them auto-update silently finds
+          # nothing, so fail loudly rather than ship a release that can't update.
+          for f in latest.yml latest-mac.yml latest-linux.yml; do
+            if gh release view "$TAG" --repo "$GITHUB_REPOSITORY" --json assets --jq '.assets[].name' | grep -qx "$f"; then
+              echo "ok   $f"
+            else
+              echo "MISSING $f — auto-update will not work"
+              exit 1
+            fi
+          done

@@ -84,6 +84,23 @@ CI runs the full test suite and the icon check on every PR. Green before review,
 
 Keep PRs focused. One change per PR is much easier to review than five.
 
+## Releasing (maintainers)
+
+Releases are automatic. Bump the version, merge to `main`, and CI does the rest:
+
+```bash
+npm version minor      # or patch / major — commits the bump
+git push
+# then merge dev -> main
+```
+
+CI notices the version changed, builds all three platforms, uploads them to a
+draft release along with the update metadata, and publishes it once every
+platform succeeds. No manual tagging.
+
+Pushing to `main` *without* a version bump only runs the tests and a packaging
+smoke test — it does not release.
+
 ## Reporting bugs
 
 Please include your OS and version, your Panebox version (Help → About), which service it happened on, and the steps to reproduce. Screenshots help.
