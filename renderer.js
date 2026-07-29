@@ -252,12 +252,25 @@ function beginReorder(event, wrapper, listEl, commit, itemSelector) {
   const startY = event.clientY;
   let dragging = false;
 
+  const sidebarRight = $('sidebar').getBoundingClientRect().right;
+  const appId = wrapper.dataset.appId;
+  const canDropIntoGrid = state.split && appId && !state.splitIds.has(appId);
+  let overGrid = false;
+
   const onMove = (e) => {
     if (!dragging) {
-      if (Math.abs(e.clientY - startY) < 6) return; // still a click, not a drag
+      if (Math.abs(e.clientY - startY) < 6 && Math.abs(e.clientX - startX) < 6) return;
       dragging = true;
       wrapper.classList.add('dragging');
       document.body.classList.add('reordering');
+    }
+
+    // Dragged out of the sidebar and into the grid: that means "add a pane",
+    // not "reorder".
+    if (canDropIntoGrid) {
+      overGrid = e.clientX > sidebarRight + 12;
+      $('view-container').classList.toggle('drop-target', overGrid);
+      if (overGrid) return; // don't shuffle the sidebar while aiming at the grid
     }
 
     const others = [...list.querySelectorAll(selector)].filter((n) => n !== wrapper);
@@ -278,9 +291,16 @@ function beginReorder(event, wrapper, listEl, commit, itemSelector) {
   const onUp = () => {
     document.removeEventListener('pointermove', onMove);
     document.removeEventListener('pointerup', onUp);
+    $('view-container').classList.remove('drop-target');
     if (!dragging) return;
     wrapper.classList.remove('dragging');
     document.body.classList.remove('reordering');
+
+    if (overGrid && canDropIntoGrid) {
+      renderSidebar(); // undo any shuffling that happened on the way out
+      toggleInSplit(appId);
+      return;
+    }
     onCommit();
   };
 
@@ -393,8 +413,10 @@ function renderSplit() {
   container.appendChild(adder); // keep it last
   adder.classList.toggle('active', shown.size < 12 && !state.focusedId);
 
+  // Sized from the panes alone. Counting the add tile as a cell left two
+  // services sharing a row with a large empty square beside them.
   if (state.focusedId && !shown.has(state.focusedId)) state.focusedId = null;
-  container.style.setProperty('--grid-cols', gridColumns(shown.size + (shown.size < 12 ? 1 : 0)));
+  container.style.setProperty('--grid-cols', gridColumns(shown.size));
   applySplitFocus();
   renderSidebar();
   saveSplit();
@@ -673,9 +695,26 @@ function createWebview(app) {
   });
 
   head.append(label, focusBtn, openBtn, closeBtn);
-  head.addEventListener('dblclick', () =>
-    setSplitFocus(state.focusedId === app.id ? null : app.id),
-  );
+  // Double-click expands. A third click inside the same burst opens the
+  // service on its own — the natural "keep going" gesture.
+  let clicks = 0;
+  let clickTimer = null;
+  head.addEventListener('click', (e) => {
+    if (e.target.closest('.pane-btn')) return;
+    clicks++;
+    clearTimeout(clickTimer);
+    if (clicks === 2) {
+      setSplitFocus(state.focusedId === app.id ? null : app.id);
+    } else if (clicks >= 3) {
+      clicks = 0;
+      setSplit(false);
+      switchTab(app.id);
+      return;
+    }
+    clickTimer = setTimeout(() => {
+      clicks = 0;
+    }, 450);
+  });
 
   pane.append(head, wv);
   $('view-container').appendChild(pane);

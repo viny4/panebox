@@ -690,18 +690,36 @@ body.reordering webview { pointer-events: none; }
   width: 14px; height: 3px; border-radius: 2px; background: var(--accent);
 }
 
-/* "+" tile inside the grid. */
+/* "+" control. Floats over the grid rather than taking a cell — as a cell it
+   left a large empty square next to two panes. */
+#view-container .pane-add,
 .pane-add {
-  display: none; align-items: center; justify-content: center;
-  flex-direction: column; gap: 8px;
-  background: transparent; border: 1px dashed var(--border);
-  border-radius: var(--radius-md); color: var(--text-dim);
+  display: none; position: absolute; right: 14px; bottom: 14px; z-index: 20;
+  align-items: center; gap: 7px; padding: 8px 14px;
+  background: var(--bg-panel); border: 1px solid var(--border);
+  border-radius: 999px; color: var(--text-muted);
   cursor: pointer; font-family: inherit; font-size: 12px;
-  transition: all .18s ease;
+  box-shadow: var(--shadow); transition: all .18s ease;
 }
-#view-container.split .pane-add.active { display: flex; }
-.pane-add:hover { border-color: var(--accent); color: var(--accent); border-style: solid; }
+.pane-add svg { width: 15px; height: 15px; }
+#view-container.split .pane-add.active {
+  display: flex; position: absolute;
+  right: 14px; bottom: 14px; left: auto; top: auto;
+  width: auto; height: auto; flex: 0 0 auto;
+  border-style: solid; background: var(--bg-panel);
+}
+#view-container.split .pane-add:hover { border-color: var(--accent); color: var(--accent); }
 #view-container.split.has-focus .pane-add { display: none; }
+
+/* Dragging a sidebar icon over the grid. */
+#view-container.drop-target { outline: 2px dashed var(--accent); outline-offset: -6px; }
+#view-container.drop-target::after {
+  content: 'Drop to add a pane';
+  position: absolute; left: 50%; top: 16px; transform: translateX(-50%);
+  padding: 6px 14px; border-radius: 999px; z-index: 30;
+  background: var(--accent); color: #fff; font-size: 12px; font-weight: 600;
+  pointer-events: none;
+}
 
 .popover-item {
   display: flex; align-items: center; gap: 9px; width: 100%;
