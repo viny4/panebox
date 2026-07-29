@@ -563,21 +563,17 @@ function hibernationTick() {
 // ---------------------------------------------------------------- add app
 
 function addApp({ name, url, serviceKey, color }) {
-  let finalName = (name || '').trim();
-  let finalUrl = (url || '').trim();
-  if (!finalUrl) return null;
-  if (!/^https?:\/\//i.test(finalUrl)) finalUrl = `https://${finalUrl}`;
-
-  try {
-    const parsed = new URL(finalUrl);
-    if (!finalName) {
-      const host = parsed.hostname.replace(/^www\./, '');
-      finalName = host.split('.')[0].replace(/^./, (c) => c.toUpperCase());
-    }
-  } catch {
-    alert('That does not look like a valid URL.');
+  const parsed = window.URLS.normalizeServiceUrl(url);
+  if (!parsed) {
+    alert(
+      `"${String(url).trim()}" is not a web address Panebox can open.\n\n` +
+        'Try something like notion.so or https://example.com/app.',
+    );
     return null;
   }
+
+  let finalName = (name || '').trim() || window.URLS.nameFromUrl(parsed);
+  const finalUrl = parsed.href;
 
   // A second copy of the same service is a feature (two accounts), but two
   // rows reading "Gemini" is not — number them so they can be told apart.
