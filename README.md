@@ -50,6 +50,17 @@ If neither of those matters to you, Ferdium is the better tool. That's a real re
 - Export / import that config as a plain file to move between machines
 - Update check asks GitHub once a day whether a newer release exists, sends no identifiers, and can be turned off
 
+## When a site refuses to sign you in
+
+Google blocks OAuth from any browser it identifies as embedded — *"This browser or app may not be secure"* — which affects every app of this kind, Panebox included. It is a Google policy, not a bug here.
+
+Two ways around it:
+
+- **Use the service's own login.** Most offer email sign-in alongside "Continue with Google", and that works normally.
+- **Change what the service identifies as.** Right-click the service → Configure → **Identify as** → Firefox. That is per service, and Firefox is the option that usually gets through.
+
+Panebox does not spoof anything by default, because pretending to be a different browser can equally well break a site that adapts to it.
+
 ## Keyboard shortcuts
 
 | Shortcut | Action |

@@ -55,6 +55,8 @@ contextBridge.exposeInMainWorld('panebox', {
   system: {
     metrics: (entries) => ipcRenderer.invoke('pb:metrics', entries),
     clearSession: (partition) => ipcRenderer.invoke('pb:session:clear', partition),
+    setUserAgent: (partition, userAgent) =>
+      ipcRenderer.invoke('pb:session:userAgent', { partition, userAgent }),
     openExternal: (url) => ipcRenderer.send('pb:open-external', url),
   },
 
