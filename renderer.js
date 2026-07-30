@@ -928,7 +928,7 @@ function handleNotification(app, payload) {
 
 function hibernationTick() {
   if (!settings().hibernateEnabled) return;
-  const limit = Math.max(1, Number(settings().hibernateAfterMinutes) || 15) * 60_000;
+  const limit = Math.max(1, Number(settings().hibernateAfterMinutes) || 10) * 60_000;
   const now = Date.now();
 
   for (const [appId] of state.webviews) {
@@ -1595,9 +1595,15 @@ function startTaskManager() {
 
     const rows = $('task-rows');
     rows.textContent = '';
+    let totalMem = 0;
+    let awake = 0;
+
     for (const app of apps()) {
       const m = byId.get(app.id);
       const asleep = !state.webviews.has(app.id);
+      if (!asleep) awake++;
+      if (m && m.memoryMB) totalMem += m.memoryMB;
+
       const tr = document.createElement('tr');
       for (const value of [
         app.name,
@@ -1609,13 +1615,49 @@ function startTaskManager() {
         td.textContent = value;
         tr.appendChild(td);
       }
+
+      // Reclaiming memory should not mean waiting out the idle timer.
+      const action = document.createElement('td');
+      if (!asleep && app.id !== state.activeId) {
+        const sleep = document.createElement('button');
+        sleep.className = 'btn-mini';
+        sleep.textContent = 'Sleep';
+        sleep.title = `Free ${m && m.memoryMB ? `${m.memoryMB} MB` : 'memory'} — reloads when you open it again`;
+        sleep.addEventListener('click', () => {
+          destroyWebview(app.id);
+          renderSidebar();
+          refresh();
+        });
+        action.appendChild(sleep);
+      }
+      tr.appendChild(action);
       rows.appendChild(tr);
     }
+
+    const summary = $('task-summary');
+    const sleepable = apps().filter(
+      (a) => state.webviews.has(a.id) && a.id !== state.activeId,
+    ).length;
+    summary.textContent = `${awake} of ${apps().length} awake · ${totalMem} MB in use`;
+    $('btn-sleep-all').hidden = sleepable === 0;
+    $('btn-sleep-all').textContent = `Sleep ${sleepable} background service${sleepable === 1 ? '' : 's'}`;
   };
 
   refresh();
   state.taskTimer = setInterval(refresh, 2000);
+  state.taskRefresh = refresh;
   openModal('task-modal');
+}
+
+/** Everything except what you are looking at. */
+function sleepBackgroundServices() {
+  for (const appId of [...state.webviews.keys()]) {
+    if (appId === state.activeId) continue;
+    if (state.split && state.splitIds.has(appId)) continue; // still on screen
+    destroyWebview(appId);
+  }
+  renderSidebar();
+  if (state.taskRefresh) state.taskRefresh();
 }
 
 function stopTaskManager() {
@@ -1830,7 +1872,7 @@ function fillSettingsForm() {
   $('set-privacy').checked = !!s.notificationPrivacy;
   $('set-badges').checked = s.showBadges !== false;
   $('set-hibernate').checked = s.hibernateEnabled !== false;
-  $('set-hibernate-mins').value = s.hibernateAfterMinutes || 15;
+  $('set-hibernate-mins').value = s.hibernateAfterMinutes || 10;
   $('set-ontop').checked = !!s.alwaysOnTop;
   $('set-tray').checked = s.closeToTray !== false;
   $('set-title').value = s.windowTitle || 'Panebox';
@@ -2065,6 +2107,7 @@ document.addEventListener('DOMContentLoaded', () => {
   $('btn-import').addEventListener('click', () => window.panebox.config.import());
   $('btn-relaunch').addEventListener('click', () => window.panebox.window.relaunch());
   $('btn-taskmanager').addEventListener('click', startTaskManager);
+  $('btn-sleep-all').addEventListener('click', sleepBackgroundServices);
   $('btn-check-updates').addEventListener('click', async () => {
     const result = await window.panebox.updates.check();
     if (result.status === 'available') showUpdateBanner(result);
