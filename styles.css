@@ -220,11 +220,9 @@ body.platform-darwin #sidebar { padding-top: 44px; }
 #view-wrap { flex: 1; display: flex; position: relative; overflow: hidden; }
 #view-container { flex: 1; position: relative; overflow: hidden; background: var(--bg); }
 
-webview {
-  position: absolute; inset: 0; width: 100%; height: 100%;
-  border: none; visibility: hidden;
-}
-webview.active { visibility: visible; }
+/* Visibility is owned by the pane wrapper now — see `.pane` below. The old
+   rules here predated panes and still keyed off `.active` on the webview
+   itself, which nothing sets any more. */
 
 /* ------------------------------------------------------------ todo panel */
 
@@ -632,7 +630,11 @@ body.reordering webview { pointer-events: none; }
      paints, so the header appeared to exist and then vanish. */
   position: relative; inset: auto;
   flex: 1; min-height: 0; width: 100%; height: auto;
-  border: none; visibility: visible;
+  border: none;
+  /* Deliberately no `visibility` here. It inherits, so declaring `visible` let
+     every webview un-hide itself inside its hidden pane: all services rendered
+     at once, stacked, and you saw whichever painted last rather than the one
+     you clicked. It also meant Chromium never throttled the background ones. */
 }
 .pane-head { display: none; }
 

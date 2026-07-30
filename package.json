@@ -1,7 +1,7 @@
 {
   "name": "panebox",
   "productName": "Panebox",
-  "version": "2.2.0",
+  "version": "2.2.1",
   "description": "A small, private, open-source desktop deck for your web apps — AI tools, chat, mail and more in one window.",
   "main": "main.js",
   "license": "MIT",
