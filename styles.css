@@ -784,3 +784,34 @@ body.reordering webview { pointer-events: none; }
 }
 .btn-mini:hover { border-color: var(--accent); color: var(--accent); }
 .task-table td:last-child { text-align: right; width: 1%; white-space: nowrap; }
+
+/* ------------------------------------------- embedded sign-in explanation */
+
+/* Google's rejection page blames your browser and offers nothing. This sits
+   over it with what actually happened. */
+#signin-block {
+  position: absolute; inset: 48px 0 0 0; z-index: 60;
+  display: flex; align-items: center; justify-content: center;
+  padding: 24px; background: var(--bg);
+}
+#signin-block[hidden] { display: none; }
+
+.block-card {
+  max-width: 460px; padding: 28px;
+  background: var(--bg-panel); border: 1px solid var(--border);
+  border-radius: var(--radius-lg); box-shadow: var(--shadow);
+}
+.block-card h3 { font-size: 17px; margin-bottom: 12px; }
+.block-card p { font-size: 13px; line-height: 1.55; color: var(--text-muted); margin-bottom: 12px; }
+.block-card .block-alt { color: var(--text); }
+.block-card .button-row { margin: 18px 0 0; }
+.block-card .btn-primary { width: auto; padding: 10px 18px; }
+
+/* Catalog entries that will load but never let you sign in. */
+.preset-item.needs-browser { position: relative; }
+.preset-warn {
+  position: absolute; top: 5px; right: 5px;
+  padding: 1px 6px; border-radius: 999px;
+  background: rgba(245, 158, 11, .15); border: 1px solid rgba(245, 158, 11, .35);
+  color: #f59e0b; font-size: 9px; font-weight: 600; letter-spacing: .02em;
+}

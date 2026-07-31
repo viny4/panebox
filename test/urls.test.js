@@ -107,3 +107,41 @@ test('returns null for an unknown site', () => {
   assert.strictEqual(CATALOG.byHost('https://news.ycombinator.com'), null);
   assert.strictEqual(CATALOG.byHost('not a url'), null);
 });
+
+// --- embedded sign-in block --------------------------------------------------
+
+const { isEmbeddedBrowserRejection, blocksEmbeddedSignIn } = require('../lib/urls');
+
+test('recognises Google\'s embedded-browser rejection', () => {
+  assert.ok(
+    isEmbeddedBrowserRejection(
+      'https://accounts.google.com/v3/signin/rejected?continue=https://www.youtube.com',
+    ),
+  );
+  assert.ok(isEmbeddedBrowserRejection('https://accounts.google.com/InteractiveLogin/rejected'));
+});
+
+test('does not mistake the normal sign-in page for a rejection', () => {
+  // The form itself loads fine; only the submission is refused.
+  assert.ok(!isEmbeddedBrowserRejection('https://accounts.google.com/v3/signin/identifier?dsh=1'));
+  assert.ok(!isEmbeddedBrowserRejection('https://claude.ai/login'));
+});
+
+test('does not fire on a lookalike path from another site', () => {
+  assert.ok(!isEmbeddedBrowserRejection('https://example.com/signin/rejected'));
+  assert.ok(!isEmbeddedBrowserRejection('https://google.com.evil.test/signin/rejected'));
+  assert.ok(!isEmbeddedBrowserRejection('not a url'));
+});
+
+test('flags the services that refuse in-app sign-in', () => {
+  for (const url of ['https://mail.google.com', 'https://www.youtube.com', 'https://drive.google.com']) {
+    assert.ok(blocksEmbeddedSignIn(url), `${url} should be flagged`);
+  }
+});
+
+test('does not flag services that sign in fine', () => {
+  // These offer email sign-in beside the Google button, which works here.
+  for (const url of ['https://chatgpt.com', 'https://claude.ai', 'https://www.notion.so']) {
+    assert.ok(!blocksEmbeddedSignIn(url), `${url} should not be flagged`);
+  }
+});
