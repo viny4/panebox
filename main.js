@@ -612,6 +612,23 @@ ipcMain.handle('pb:metrics', (_e, entries) => {
   });
 });
 
+/**
+ * Per-service user agent.
+ *
+ * Set on the session rather than the <webview> attribute so that popups opened
+ * from that service — sign-in windows especially — inherit it too. A webview
+ * attribute would only cover the webview itself.
+ */
+ipcMain.handle('pb:session:userAgent', (_e, { partition, userAgent }) => {
+  try {
+    const sess = session.fromPartition(partition);
+    sess.setUserAgent(userAgent || USER_AGENT);
+    return true;
+  } catch {
+    return false;
+  }
+});
+
 ipcMain.handle('pb:session:clear', async (_e, partition) => {
   const sess = session.fromPartition(partition);
   await sess.clearStorageData();

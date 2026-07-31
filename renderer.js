@@ -11,6 +11,23 @@
 
 const $ = (id) => document.getElementById(id);
 
+/**
+ * User agents a service can present.
+ *
+ * Google refuses OAuth from anything it identifies as an embedded browser
+ * ("This browser or app may not be secure"), which affects every app of this
+ * kind. Presenting Firefox is the workaround that still works most often. It is
+ * per service and off by default, because lying about the browser can equally
+ * well break a site that adapts to it.
+ */
+const USER_AGENTS = {
+  '': 'Default (Chrome)',
+  'Mozilla/5.0 (Macintosh; Intel Mac OS X 14.7; rv:133.0) Gecko/20100101 Firefox/133.0':
+    'Firefox — try this if Google blocks sign-in',
+  'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/18.1 Safari/605.1.15':
+    'Safari',
+};
+
 /** At most one title-derived alert per service per minute. */
 const ACTIVITY_ALERT_COOLDOWN_MS = 60_000;
 
@@ -591,6 +608,11 @@ function createWebview(app) {
   wv.setAttribute('src', app.url);
   wv.setAttribute('partition', partitionFor(app));
   wv.setAttribute('allowpopups', 'true');
+  if (app.userAgent) {
+    wv.setAttribute('useragent', app.userAgent);
+    // Also on the session, so sign-in popups from this service match.
+    window.panebox.system.setUserAgent(partitionFor(app), app.userAgent);
+  }
   wv.dataset.appId = app.id;
 
   wv.addEventListener('dom-ready', () => {
@@ -906,7 +928,7 @@ function handleNotification(app, payload) {
 
 function hibernationTick() {
   if (!settings().hibernateEnabled) return;
-  const limit = Math.max(1, Number(settings().hibernateAfterMinutes) || 15) * 60_000;
+  const limit = Math.max(1, Number(settings().hibernateAfterMinutes) || 10) * 60_000;
   const now = Date.now();
 
   for (const [appId] of state.webviews) {
@@ -1466,6 +1488,23 @@ function openServiceModal(appId) {
   $('svc-badge').checked = app.badge !== false;
   $('svc-hibernate').checked = app.hibernate !== false;
   $('svc-session').value = app.session || 'isolated';
+
+  const uaSelect = $('svc-useragent');
+  uaSelect.textContent = '';
+  for (const [value, label] of Object.entries(USER_AGENTS)) {
+    const option = document.createElement('option');
+    option.value = value;
+    option.textContent = label;
+    uaSelect.appendChild(option);
+  }
+  const known = Object.prototype.hasOwnProperty.call(USER_AGENTS, app.userAgent || '');
+  if (!known) {
+    const custom = document.createElement('option');
+    custom.value = app.userAgent;
+    custom.textContent = 'Custom';
+    uaSelect.appendChild(custom);
+  }
+  uaSelect.value = app.userAgent || '';
   $('svc-css').value = app.customCss || '';
   $('svc-js').value = app.customJs || '';
   renderServiceWorkspaces(app);
@@ -1517,13 +1556,19 @@ function saveServiceModal() {
   app.badge = $('svc-badge').checked;
   app.hibernate = $('svc-hibernate').checked;
   app.session = $('svc-session').value;
+  const previousUa = app.userAgent;
+  app.userAgent = $('svc-useragent').value || null;
   app.customCss = $('svc-css').value;
   app.customJs = $('svc-js').value;
 
   saveApps();
 
-  // URL or partition changed — the live webview no longer matches.
-  if (app.url !== previousUrl || app.session !== previousSession) {
+  if (app.userAgent !== previousUa) {
+    window.panebox.system.setUserAgent(partitionFor(app), app.userAgent);
+  }
+
+  // URL, partition or user agent changed — the live webview no longer matches.
+  if (app.url !== previousUrl || app.session !== previousSession || app.userAgent !== previousUa) {
     destroyWebview(app.id);
     if (state.activeId === app.id) switchTab(app.id);
   }
@@ -1550,9 +1595,15 @@ function startTaskManager() {
 
     const rows = $('task-rows');
     rows.textContent = '';
+    let totalMem = 0;
+    let awake = 0;
+
     for (const app of apps()) {
       const m = byId.get(app.id);
       const asleep = !state.webviews.has(app.id);
+      if (!asleep) awake++;
+      if (m && m.memoryMB) totalMem += m.memoryMB;
+
       const tr = document.createElement('tr');
       for (const value of [
         app.name,
@@ -1564,13 +1615,49 @@ function startTaskManager() {
         td.textContent = value;
         tr.appendChild(td);
       }
+
+      // Reclaiming memory should not mean waiting out the idle timer.
+      const action = document.createElement('td');
+      if (!asleep && app.id !== state.activeId) {
+        const sleep = document.createElement('button');
+        sleep.className = 'btn-mini';
+        sleep.textContent = 'Sleep';
+        sleep.title = `Free ${m && m.memoryMB ? `${m.memoryMB} MB` : 'memory'} — reloads when you open it again`;
+        sleep.addEventListener('click', () => {
+          destroyWebview(app.id);
+          renderSidebar();
+          refresh();
+        });
+        action.appendChild(sleep);
+      }
+      tr.appendChild(action);
       rows.appendChild(tr);
     }
+
+    const summary = $('task-summary');
+    const sleepable = apps().filter(
+      (a) => state.webviews.has(a.id) && a.id !== state.activeId,
+    ).length;
+    summary.textContent = `${awake} of ${apps().length} awake · ${totalMem} MB in use`;
+    $('btn-sleep-all').hidden = sleepable === 0;
+    $('btn-sleep-all').textContent = `Sleep ${sleepable} background service${sleepable === 1 ? '' : 's'}`;
   };
 
   refresh();
   state.taskTimer = setInterval(refresh, 2000);
+  state.taskRefresh = refresh;
   openModal('task-modal');
+}
+
+/** Everything except what you are looking at. */
+function sleepBackgroundServices() {
+  for (const appId of [...state.webviews.keys()]) {
+    if (appId === state.activeId) continue;
+    if (state.split && state.splitIds.has(appId)) continue; // still on screen
+    destroyWebview(appId);
+  }
+  renderSidebar();
+  if (state.taskRefresh) state.taskRefresh();
 }
 
 function stopTaskManager() {
@@ -1785,7 +1872,7 @@ function fillSettingsForm() {
   $('set-privacy').checked = !!s.notificationPrivacy;
   $('set-badges').checked = s.showBadges !== false;
   $('set-hibernate').checked = s.hibernateEnabled !== false;
-  $('set-hibernate-mins').value = s.hibernateAfterMinutes || 15;
+  $('set-hibernate-mins').value = s.hibernateAfterMinutes || 10;
   $('set-ontop').checked = !!s.alwaysOnTop;
   $('set-tray').checked = s.closeToTray !== false;
   $('set-title').value = s.windowTitle || 'Panebox';
@@ -2020,6 +2107,7 @@ document.addEventListener('DOMContentLoaded', () => {
   $('btn-import').addEventListener('click', () => window.panebox.config.import());
   $('btn-relaunch').addEventListener('click', () => window.panebox.window.relaunch());
   $('btn-taskmanager').addEventListener('click', startTaskManager);
+  $('btn-sleep-all').addEventListener('click', sleepBackgroundServices);
   $('btn-check-updates').addEventListener('click', async () => {
     const result = await window.panebox.updates.check();
     if (result.status === 'available') showUpdateBanner(result);

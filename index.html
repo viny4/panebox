@@ -188,7 +188,7 @@
           <label class="switch"><input type="checkbox" id="set-hibernate"><span></span></label>
         </div>
         <div class="setting-row">
-          <div><strong>Sleep after</strong><span>Minutes of inactivity before sleeping.</span></div>
+          <div><strong>Sleep after</strong><span>Minutes of inactivity before sleeping. Each sleeping service returns 200&ndash;600 MB.</span></div>
           <input type="number" id="set-hibernate-mins" min="1" max="360" class="num-input" />
         </div>
         <div class="setting-row">
@@ -274,6 +274,10 @@
         <div><strong>Session</strong><span>Isolated gives this service its own login.</span></div>
         <select id="svc-session"><option value="isolated">Isolated</option><option value="shared">Shared</option></select>
       </div>
+      <div class="setting-row">
+        <div><strong>Identify as</strong><span>Change if a site refuses to work. Google blocks sign-in from apps like this &mdash; Firefox usually gets through.</span></div>
+        <select id="svc-useragent"></select>
+      </div>
       <div class="setting-block">
         <strong>Groups</strong>
         <span class="block-hint">Which workspaces show this service.</span>
@@ -299,13 +303,17 @@
   <div id="task-modal" class="modal-overlay" role="dialog" aria-modal="true" aria-labelledby="task-title">
     <div class="modal-card">
       <div class="modal-header">
-        <h3 id="task-title">Task manager</h3>
+        <div><h3 id="task-title">Task manager</h3><span id="task-summary" class="modal-sub"></span></div>
         <button class="nav-btn" data-close="task-modal" aria-label="Close">✕</button>
       </div>
       <table class="task-table">
-        <thead><tr><th>Service</th><th>CPU</th><th>Memory</th><th>State</th></tr></thead>
+        <thead><tr><th>Service</th><th>CPU</th><th>Memory</th><th>State</th><th></th></tr></thead>
         <tbody id="task-rows"></tbody>
       </table>
+      <div class="button-row" style="margin-top:14px;">
+        <button id="btn-sleep-all" class="btn-secondary" hidden>Sleep background services</button>
+      </div>
+      <p class="hint" style="margin:8px 0 0;">Sleeping frees a service's memory. It reloads when you open it again, and stays signed in.</p>
     </div>
   </div>
 
