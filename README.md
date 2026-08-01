@@ -3,7 +3,9 @@
 A small, private desktop deck for the web apps you keep open all day — ChatGPT, Claude, Gemini, Perplexity, WhatsApp, Gmail and ~50 more — each in its own isolated session, in one window.
 
 
-<img width="1470" height="956" alt="image" src="https://github.com/user-attachments/assets/5f26ff31-b5ab-4632-bc7f-f693e3d04c88" />
+![Panebox in split view: the same question answered by Claude, ChatGPT, Le Chat and Perplexity at once](docs/screenshot.png)
+
+*One question, four AI tools, one window.*
 
 
 
@@ -14,7 +16,7 @@ There are good multi-service containers already. [Ferdium](https://github.com/fe
 Panebox is for two things Ferdium isn't aimed at:
 
 1. **AI tools first.** The container category grew out of instant-messaging clients, so their defaults are Slack and Telegram. Panebox ships with ChatGPT, Claude, Gemini and Perplexity on the sidebar, and per-service session isolation means you can run two accounts of the same tool side by side without logging out.
-2. **A codebase you can read in one sitting.** No framework, no bundler, no build step for development. Roughly 2,000 lines of plain JavaScript across eight files. If you want to change how it works, you can actually find the place.
+2. **A codebase you can read in one sitting.** No framework, no bundler, no build step for development. Roughly 4,300 lines of plain JavaScript across twelve files. If you want to change how it works, you can actually find the place.
 
 If neither of those matters to you, Ferdium is the better tool. That's a real recommendation, not modesty.
 
