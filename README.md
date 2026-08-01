@@ -54,12 +54,16 @@ If neither of those matters to you, Ferdium is the better tool. That's a real re
 
 Google blocks OAuth from any browser it identifies as embedded — *"This browser or app may not be secure"* — which affects every app of this kind, Panebox included. It is a Google policy, not a bug here.
 
-Two ways around it:
+This is not a bug in Panebox and there is no way around it. Google blocks every embedded browser deliberately, because one could read your password out of its own login form. [Ferdium has the same issue open and unfixed](https://github.com/ferdium/ferdium-app/issues/2324). Wavebox works only because it is a fork of Chromium — a browser, not an app containing one.
 
-- **Use the service's own login.** Most offer email sign-in alongside "Continue with Google", and that works normally.
-- **Change what the service identifies as.** Right-click the service → Configure → **Identify as** → Firefox. That is per service, and Firefox is the option that usually gets through.
+What to do instead:
 
-Panebox does not spoof anything by default, because pretending to be a different browser can equally well break a site that adapts to it.
+- **Use the service's own login.** ChatGPT, Claude, Notion and most others offer email sign-in beside the Google button, and that works normally here. Only the Google button is refused.
+- **Keep Google's own services in your browser.** Gmail, YouTube and Drive need a real browser to sign in. Panebox flags them in the catalog and offers "Open in my browser".
+
+Panebox recognises Google's rejection page and explains this in place, rather than leaving you on a dead end that blames your browser.
+
+Changing what a service identifies as (right-click → Configure → **Identify as**) helps with sites that gate on the user agent. It does **not** get past Google — their check happens server-side when you submit, not on the user agent.
 
 ## Keyboard shortcuts
 

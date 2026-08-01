@@ -63,6 +63,9 @@
         </div>
 
         <div class="action-buttons">
+          <button id="btn-open-browser" class="nav-btn" title="Open this service in my browser" aria-label="Open in browser">
+            <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"></path><polyline points="15 3 21 3 21 9"></polyline><line x1="10" y1="14" x2="21" y2="3"></line></svg>
+          </button>
           <button id="btn-split" class="nav-btn" title="Split view — every service in this group at once (Cmd/Ctrl+Shift+S)" aria-label="Split view">
             <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="7" height="7" rx="1"></rect><rect x="14" y="3" width="7" height="7" rx="1"></rect><rect x="3" y="14" width="7" height="7" rx="1"></rect><rect x="14" y="14" width="7" height="7" rx="1"></rect></svg>
           </button>
@@ -88,6 +91,24 @@
         <button id="find-prev" class="nav-btn" title="Previous" aria-label="Previous match">↑</button>
         <button id="find-next" class="nav-btn" title="Next" aria-label="Next match">↓</button>
         <button id="find-close" class="nav-btn" title="Close" aria-label="Close find bar">✕</button>
+      </div>
+
+      <div id="signin-block" hidden>
+        <div class="block-card">
+          <h3>Google won't sign you in from here</h3>
+          <p>
+            Google refuses sign-in from apps that embed a browser — every app like
+            Panebox, not just this one. It is their policy and there is no way around it.
+          </p>
+          <p class="block-alt">
+            Most services offer <strong>email sign-in</strong> beside the Google button,
+            and that works normally here. Google's own services need a real browser.
+          </p>
+          <div class="button-row">
+            <button id="block-open-browser" class="btn-primary">Open in my browser</button>
+            <button id="block-back" class="btn-secondary">Go back</button>
+          </div>
+        </div>
       </div>
 
       <div id="view-wrap">

@@ -626,6 +626,16 @@ function createWebview(app) {
     if (!app.serviceKey) findBestIcon(app, wv);
   });
 
+  // Google's dead-end page explains nothing and blames the browser. Replace it
+  // with what actually happened and what to do instead.
+  const checkForBlock = () => {
+    if (app.id !== state.activeId) return;
+    const url = withWebview(app.id, (view) => view.getURL()) || '';
+    const blocked = window.URLS.isEmbeddedBrowserRejection(url);
+    $('signin-block').hidden = !blocked;
+    if (blocked) state.blockedUrl = app.url;
+  };
+
   const syncUrl = () => {
     if (app.id !== state.activeId) return;
     const url = withWebview(app.id, (view) => view.getURL()) || app.url;
@@ -635,10 +645,12 @@ function createWebview(app) {
   wv.addEventListener('did-navigate', () => {
     syncUrl();
     refreshNavState();
+    checkForBlock();
   });
   wv.addEventListener('did-navigate-in-page', () => {
     syncUrl();
     refreshNavState();
+    checkForBlock();
   });
 
   wv.addEventListener('did-start-loading', () => setLoading(app.id, true));
@@ -780,6 +792,7 @@ function switchTab(appId) {
     tab.classList.toggle('sleeping', !state.webviews.has(id));
   }
 
+  $('signin-block').hidden = true;
   $('url-input').value = withWebview(appId, (view) => view.getURL()) || app.url;
   $('btn-mute').classList.toggle('off', !!app.muted);
   setLoading(appId, withWebview(appId, (wv) => wv.isLoading(), false));
@@ -1068,6 +1081,16 @@ function renderCatalog() {
     const label = document.createElement('span');
     label.textContent = service.name;
     item.appendChild(label);
+
+    // Better to say so before they add it than after they fail to sign in.
+    if (window.URLS.blocksEmbeddedSignIn(service.url)) {
+      item.classList.add('needs-browser');
+      item.title = `${service.name} blocks sign-in from apps like Panebox. It will load, but you cannot log in — Google's policy, not a bug.`;
+      const flag = document.createElement('span');
+      flag.className = 'preset-warn';
+      flag.textContent = 'no sign-in';
+      item.appendChild(flag);
+    }
     item.addEventListener('click', () => {
       addApp({ name: service.name, url: service.url, serviceKey: service.key, color: service.color });
       closeModal('add-modal');
@@ -2022,6 +2045,24 @@ document.addEventListener('DOMContentLoaded', () => {
     updateDndButton();
     $('set-dnd').checked = next;
   });
+  $('btn-open-browser').addEventListener('click', () => {
+    const app = appById(state.activeId);
+    if (!app) return;
+    const live = withWebview(state.activeId, (wv) => wv.getURL());
+    window.panebox.system.openExternal(live && /^https?:/.test(live) ? live : app.url);
+  });
+
+  $('block-open-browser').addEventListener('click', () => {
+    const app = appById(state.activeId);
+    if (app) window.panebox.system.openExternal(app.url);
+    $('signin-block').hidden = true;
+  });
+
+  $('block-back').addEventListener('click', () => {
+    $('signin-block').hidden = true;
+    withWebview(state.activeId, (wv) => (wv.canGoBack() ? wv.goBack() : wv.reload()));
+  });
+
   $('btn-split').addEventListener('click', toggleSplit);
   $('btn-find').addEventListener('click', openFind);
   $('btn-todo').addEventListener('click', () => {
